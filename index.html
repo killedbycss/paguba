@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f3d58f" />
+    <meta name="description" content="Интерактивный архив дел" />
+    <title>Архив дел</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Lora:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="story" aria-label="Архив из шести дел">
+      <div class="case-track" id="caseTrack"></div>
+
+      <button class="down-arrow" type="button" aria-label="Продолжить — пока недоступно">↓</button>
+
+      <nav class="case-nav" aria-label="Навигация по делам">
+        <button class="nav-arrow" id="prevCase" type="button" aria-label="Предыдущее дело">←</button>
+        <button class="case-title" id="caseTitle" type="button" aria-label="Текущее дело">Первое дело</button>
+        <button class="nav-arrow" id="nextCase" type="button" aria-label="Следующее дело">→</button>
+      </nav>
+
+      <section class="not-found" id="notFound" aria-hidden="true">
+        <div class="not-found-code">404</div>
+        <button class="return-home" id="returnHome" type="button">хотите вернуться на главную?</button>
+      </section>
+
+      <section class="exit-route" id="exitRoute" aria-hidden="true">
+        <div class="exit-step exit-step-one" data-exit-step="1">
+          <div class="exit-question">Вы уверены,<br>что хотите уйти?</div>
+          <button class="exit-return" type="button">вернуться</button>
+          <button class="exit-next exit-next-down" type="button" aria-label="Продолжить">↓</button>
+        </div>
+        <div class="exit-step exit-step-two" data-exit-step="2" hidden>
+          <button class="exit-next exit-next-right" type="button" aria-label="Продолжить">→</button>
+          <div class="exit-question exit-question-loud">ВЫ ТОЧНО УВЕРЕНЫ,<br>ЧТО ХОТИТЕ УЙТИ???</div>
+          <button class="exit-return" type="button">вернуться</button>
+        </div>
+        <div class="exit-step exit-step-three" data-exit-step="3" hidden>
+          <button class="last-return" type="button">ПОСЛЕДНИЙ ШАНС<br>ВЕРНУТЬСЯ <span>→</span></button>
+          <button class="go-home" type="button">пойти дальше</button>
+        </div>
+      </section>
+
+      <div class="corruption-bars" id="corruptionBars" aria-hidden="true"></div>
+
+      <section class="audiobook" id="audiobook" hidden aria-label="Вторая оболочка">
+        <button class="book-back" type="button" aria-label="Вернуться к делам">↑</button>
+        <button class="chapter-menu-button" id="chapterMenuButton" type="button">Глава 1</button>
+        <div class="chapter-menu" id="chapterMenu" hidden>
+          <button type="button" data-chapter="0">01</button><button type="button" data-chapter="1">02</button>
+          <button type="button" data-chapter="2">03</button><button type="button" data-chapter="3">04</button>
+          <button type="button" data-chapter="4">05</button><button type="button" data-chapter="5">06</button>
+          <button type="button" data-chapter="6">07</button><button type="button" data-chapter="7">08</button>
+        </div>
+        <div class="book-media" id="bookMedia" aria-hidden="true"></div>
+        <div class="book-text" id="bookText" aria-live="off"></div>
+        <div class="book-controls">
+          <button class="seek-control seek-back" type="button" aria-label="Назад">←</button>
+          <button class="play-control" type="button" aria-label="Пауза">Ⅱ</button>
+          <button class="seek-control seek-forward" type="button" aria-label="Вперёд">→</button>
+        </div>
+        <div class="chapter-intro" id="chapterIntro" aria-hidden="true">
+          <div>Глава <span class="chapter-intro-number">1</span></div>
+          <strong class="chapter-intro-title"></strong>
+        </div>
+        <audio id="narration" preload="metadata"></audio>
+      </section>
+
+      <div class="instruction" id="instruction" role="dialog" aria-modal="true" aria-labelledby="instructionTitle">
+        <div class="instruction-card">
+          <h1 id="instructionTitle">Добро пожаловать в Офис!</h1>
+          <p>Ваша задача — отсортировать представленные документы, присвоив им ярлык. Переход по делам станет доступен после первого ярлыка.</p>
+          <p>Работайте в своё удовольствие!</p>
+        </div>
+        <button class="instruction-start" id="instructionStart" type="button">Приступить!</button>
+        <strong class="sound-warning">внимание! звуковые эффекты</strong>
+      </div>
+
+      <audio id="officeMusic" src="content/Soundtrack/Офис.mp3" loop preload="auto"></audio>
+    </main>
+    <script src="content/cases.js"></script>
+    <script src="content/book.js"></script>
+    <script src="content/word-timings.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
