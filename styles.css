@@ -629,3 +629,9 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+@import url(https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap);
+
+footer {
+  font-family: Inter, "EB Garamond", serif;
+}
