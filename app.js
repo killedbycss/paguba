@@ -44,6 +44,8 @@ let seekStartedAt = 0;
 let chapterIntroTimer;
 let chapterLoadToken = 0;
 let thirdTransitionStarted = false;
+const EXPERIENCE_KEY = "paguba-experience-v1";
+const audioFadeTokens = new WeakMap();
 
 const CHAPTER_MEDIA = [
   [{ at: 0, src: "content/VideosPart2/Start.mp4", intro: true }, { at: 10, src: "content/ImagesPart2/CH1_Start.JPG" }, { at: .62, src: "content/VideosPart2/CH1.MP4", loop: true }],
@@ -103,6 +105,60 @@ track.innerHTML = CASES.map((_, index) => caseMarkup(index)).join("");
 function getState(canvas) {
   if (!canvas._state) canvas._state = { active: 0, labels: {} };
   return canvas._state;
+}
+
+function readExperience() {
+  try {
+    return JSON.parse(localStorage.getItem(EXPERIENCE_KEY) || "{}") || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function storageValue(key) {
+  try { return localStorage.getItem(key); } catch (_) { return null; }
+}
+
+function setStorageValue(key, value) {
+  try { localStorage.setItem(key, value); } catch (_) { /* Optional persistence. */ }
+}
+
+function writeExperience(patch) {
+  try {
+    localStorage.setItem(EXPERIENCE_KEY, JSON.stringify({ ...readExperience(), ...patch }));
+  } catch (_) { /* The experience still works when storage is unavailable. */ }
+}
+
+function restoreOfficeDocuments() {
+  const storedCases = readExperience().cases;
+  if (!Array.isArray(storedCases)) return;
+  track.querySelectorAll(".case-canvas").forEach((canvas, caseIndex) => {
+    const saved = storedCases[caseIndex];
+    if (!saved || typeof saved !== "object") return;
+    const count = CASES[caseIndex].documents.length;
+    const labels = Object.fromEntries(Object.entries(saved.labels || {}).filter(([key, value]) => {
+      const documentIndex = Number(key);
+      return Number.isInteger(documentIndex) && documentIndex >= 0 && documentIndex < count && LABELS.some(label => label.id === value);
+    }));
+    let active = saved.active === null ? null : Number(saved.active);
+    if (!Number.isInteger(active) || active < 0 || active >= count) active = 0;
+    if (active === null && Object.keys(labels).length < count) {
+      active = Array.from({ length: count }, (_, index) => index).find(index => !labels[index]) ?? 0;
+    }
+    canvas._state = { active, labels };
+  });
+}
+
+function persistOfficeState() {
+  const cases = [...track.querySelectorAll(".case-canvas")].map(canvas => {
+    const state = getState(canvas);
+    return { active: state.active, labels: { ...state.labels } };
+  });
+  writeExperience({ shell: "office", activeCase, cases });
+}
+
+function persistBookLocation() {
+  writeExperience({ shell: "book", activeCase, bookChapter: currentBookChapter });
 }
 
 function playPaperSound() {
@@ -213,6 +269,7 @@ function exchangeDocument(canvas, targetIndex) {
   animateReflow(canvas, () => {
     state.active = targetIndex;
   });
+  persistOfficeState();
 }
 
 function sortActive(canvas, label) {
@@ -224,9 +281,11 @@ function sortActive(canvas, label) {
     const nextPending = CASES[+canvas.dataset.case].documents.findIndex((_, index) => index !== state.active && !state.labels[index]);
     state.active = nextPending === -1 ? null : nextPending;
   });
+  persistOfficeState();
   window.setTimeout(() => setCase(activeCase), 780);
 }
 
+restoreOfficeDocuments();
 track.querySelectorAll(".case-canvas").forEach(canvas => {
   renderCanvas(canvas);
   canvas.addEventListener("click", event => {
@@ -237,7 +296,7 @@ track.querySelectorAll(".case-canvas").forEach(canvas => {
   });
 });
 
-function setCase(index) {
+function setCase(index, shouldPersist = true) {
   if (index >= CASES.length) {
     show404();
     return;
@@ -251,13 +310,17 @@ function setCase(index) {
   prev.disabled = activeCase === 0;
   next.disabled = Object.keys(getState(track.children[activeCase]).labels).length === 0;
   if (!officeMusic.paused) fadeMusic([.16, .15, .13, .11, .08, .055][activeCase], 1100);
+  if (shouldPersist) persistOfficeState();
 }
 
 function fadeMusic(target, duration = 1400) {
+  const token = Symbol("office-fade");
+  audioFadeTokens.set(officeMusic, token);
   const start = officeMusic.volume;
   const started = performance.now();
   const tick = now => {
-    const progress = Math.min(1, (now - started) / duration);
+    if (audioFadeTokens.get(officeMusic) !== token) return;
+    const progress = Math.max(0, Math.min(1, (now - started) / duration));
     officeMusic.volume = start + (target - start) * progress;
     if (progress < 1) requestAnimationFrame(tick);
     else if (target === 0) officeMusic.pause();
@@ -266,10 +329,13 @@ function fadeMusic(target, duration = 1400) {
 }
 
 function fadeAudio(audio, target, duration = 900) {
+  const token = Symbol("audio-fade");
+  audioFadeTokens.set(audio, token);
   const start = audio.volume;
   const started = performance.now();
   const tick = now => {
-    const progress = Math.min(1, (now - started) / duration);
+    if (audioFadeTokens.get(audio) !== token) return;
+    const progress = Math.max(0, Math.min(1, (now - started) / duration));
     audio.volume = start + (target - start) * progress;
     if (progress < 1) requestAnimationFrame(tick);
     else if (target === 0) audio.pause();
@@ -297,10 +363,10 @@ function setShellMetadata(shell) {
   siteIcon.href = `content/Icons/ico${isThird ? 3 : isBook ? 2 : 1}.ico`;
 }
 
-function playChapterSoundtrack(index) {
+function playChapterSoundtrack(index, shouldPlay = true) {
   bookSoundtrack.src = `content/Soundtrack/${CHAPTER_SOUNDTRACKS[index]}.mp3`;
-  bookSoundtrack.volume = 0;
-  bookSoundtrack.play().then(() => fadeAudio(bookSoundtrack, .045, 1800)).catch(() => {});
+  bookSoundtrack.volume = shouldPlay ? 0 : .045;
+  if (shouldPlay) bookSoundtrack.play().then(() => fadeAudio(bookSoundtrack, .045, 1800)).catch(() => {});
 }
 
 async function startMusic() {
@@ -341,8 +407,8 @@ function chapterProgressKey(index) {
 }
 
 function saveChapterProgress() {
-  if (!Number.isFinite(narration.currentTime)) return;
-  localStorage.setItem(chapterProgressKey(currentBookChapter), String(narration.currentTime));
+  if (!narration.getAttribute("src") || !Number.isFinite(narration.currentTime)) return;
+  try { localStorage.setItem(chapterProgressKey(currentBookChapter), String(narration.currentTime)); } catch (_) { /* Optional persistence. */ }
 }
 
 function chapterWords(index) {
@@ -456,33 +522,35 @@ function showChapterIntro(index) {
   }, 2700);
 }
 
-function loadBookChapter(index, withIntro = true) {
+function loadBookChapter(index, withIntro = true, autoplay = true) {
   const loadToken = ++chapterLoadToken;
   saveChapterProgress();
   currentBookChapter = Math.max(0, Math.min(BOOK_DATA.length - 1, index));
+  persistBookLocation();
   currentMediaIndex = -1;
   narration.pause();
   bookMedia.classList.remove("is-live");
   narration.src = `content/AudioPart2/Record${currentBookChapter + 1}.m4a`;
   renderBookText(currentBookChapter);
   showChapterMedia(0);
-  playChapterSoundtrack(currentBookChapter);
+  playChapterSoundtrack(currentBookChapter, autoplay);
   narration.addEventListener("loadedmetadata", () => {
     if (loadToken !== chapterLoadToken) return;
-    const saved = Number(localStorage.getItem(chapterProgressKey(currentBookChapter))) || 0;
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(chapterProgressKey(currentBookChapter))) || 0; } catch (_) { /* Start at the beginning. */ }
     narration.currentTime = Math.min(saved, Math.max(0, narration.duration - .1));
     updateBookProgress();
     if (withIntro) showChapterIntro(currentBookChapter);
-    else narration.play().catch(() => {});
+    else if (autoplay) narration.play().catch(() => {});
   }, { once: true });
 }
 
-function enterAudiobook(chapterIndex = 0) {
-  localStorage.setItem("audiobook-visited", "1");
+function enterAudiobook(chapterIndex = 0, withIntro = true, autoplay = true) {
+  setStorageValue("audiobook-visited", "1");
   fadeMusic(0, 700);
   setShellMetadata("book");
   audiobook.hidden = false;
-  loadBookChapter(chapterIndex, true);
+  loadBookChapter(chapterIndex, withIntro, autoplay);
 }
 
 function leaveAudiobook() {
@@ -503,6 +571,7 @@ function leaveAudiobook() {
 }
 
 function seekNarration(direction, heldFor = 0) {
+  if (!Number.isFinite(narration.duration)) return;
   const amount = heldFor > 4200 ? 18 : heldFor > 2200 ? 9 : heldFor > 900 ? 5 : 2.5;
   const target = narration.currentTime + direction * amount;
   if (target < 0 && currentBookChapter > 0) {
@@ -573,7 +642,7 @@ window.addEventListener("pageshow", () => {
 });
 
 document.querySelector(".down-arrow").addEventListener("click", () => {
-  if (localStorage.getItem("audiobook-visited") === "1") enterAudiobook(activeCase);
+  if (storageValue("audiobook-visited") === "1") enterAudiobook(activeCase);
   else showExitStep(1);
 });
 exitRoute.querySelectorAll(".exit-return, .last-return").forEach(button => button.addEventListener("click", closeExitRoute));
@@ -596,23 +665,31 @@ returnHome.addEventListener("click", () => {
   startMusic();
 });
 
-if (localStorage.getItem("office-instruction-seen") === "1") instruction.hidden = true;
+if (storageValue("office-instruction-seen") === "1") instruction.hidden = true;
 instructionStart.addEventListener("click", () => {
-  localStorage.setItem("office-instruction-seen", "1");
+  setStorageValue("office-instruction-seen", "1");
   instruction.classList.add("is-closing");
   window.setTimeout(() => { instruction.hidden = true; }, 420);
   startMusic();
 });
 
 document.addEventListener("pointerdown", () => {
-  if (instruction.hidden && !hasReturned) startMusic();
+  if (instruction.hidden && audiobook.hidden && !hasReturned) startMusic();
 }, { once: true });
 
 prev.addEventListener("click", () => setCase(activeCase - 1));
 next.addEventListener("click", () => setCase(activeCase + 1));
-window.addEventListener("resize", () => setCase(activeCase));
+window.addEventListener("resize", () => setCase(activeCase, audiobook.hidden));
 window.addEventListener("keydown", event => {
+  if (!audiobook.hidden || !instruction.hidden || exitRoute.classList.contains("is-open") || story.classList.contains("show-404")) return;
   if (event.key === "ArrowLeft") prev.click();
   if (event.key === "ArrowRight") next.click();
 });
-setCase(0);
+const restoredExperience = readExperience();
+const restoredCase = Number.isInteger(restoredExperience.activeCase) ? restoredExperience.activeCase : 0;
+setCase(restoredCase, false);
+if (restoredExperience.shell === "book" && storageValue("audiobook-visited") === "1") {
+  instruction.hidden = true;
+  const restoredChapter = Number.isInteger(restoredExperience.bookChapter) ? restoredExperience.bookChapter : restoredCase;
+  enterAudiobook(restoredChapter, false, false);
+}

@@ -61,8 +61,8 @@
   const assetPaths={hand:"content/ElementsPart3/Hand.svg",human:"content/ElementsPart3/Human.svg",brain:"content/ElementsPart3/Bain.svg"};
   const assetsReady=Promise.all(Object.entries(assetPaths).map(([name,src])=>new Promise(resolve=>{const image=new Image();image.onload=()=>{svg[name]=image;resolve();};image.onerror=resolve;image.src=src;})));
   let scene="blank",pointer=[.5,.5],clickPoint=[.5,.5],clickStarted=-10000,activity=0,morph=1,morphStarted=0,transitioning=false,pendingAdvance=false,ready=false;
-  let humanDone=false,sphereDone=false,queue=[],queueDone=null,creditsTimer,imageTimer,currentImage="",thirdSoundtrack,soundtrackStarting=false;
-  const MORPH_MS=1750,IMAGE_MS=4900;
+  let humanDone=false,sphereDone=false,queue=[],queueDone=null,creditsTimer,currentImage="",imageGeneration=0,thirdSoundtrack,soundtrackStarting=false;
+  const MORPH_MS=1750,IMAGE_FADE_MS=2800;
 
   function drawAsset(ctx,name,cx,cy,height){const img=svg[name];if(!img)return;const ratio=img.width/img.height;ctx.drawImage(img,cx-height*ratio/2,cy-height/2,height*ratio,height);}
   function arrow(ctx,x1,y1,x2,y2,size){const a=Math.atan2(y2-y1,x2-x1);ctx.lineWidth=size*.022;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineTo(x2-Math.cos(a-.72)*size*.075,y2-Math.sin(a-.72)*size*.075);ctx.moveTo(x2,y2);ctx.lineTo(x2-Math.cos(a+.72)*size*.075,y2-Math.sin(a+.72)*size*.075);ctx.stroke();}
@@ -98,13 +98,29 @@
   function upload(index){gl.activeTexture(gl.TEXTURE0+index);gl.bindTexture(gl.TEXTURE_2D,textures[index]);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.LUMINANCE,gl.LUMINANCE,gl.UNSIGNED_BYTE,masks[index]);}
   function showImage(src){
     if(src===currentImage)return;
-    clearTimeout(imageTimer);imageLayer.classList.remove("is-visible");
-    const replace=()=>{currentImage=src;if(!src){imageLayer.innerHTML="";return;}imageLayer.innerHTML=`<img class="third-image-back" src="${src}" alt=""><img class="third-image-front" src="${src}" alt="">`;requestAnimationFrame(()=>requestAnimationFrame(()=>imageLayer.classList.add("is-visible")));};
-    imageTimer=setTimeout(replace,currentImage?1500:0);
+    const generation=++imageGeneration;
+    currentImage=src;
+    const previous=[...imageLayer.querySelectorAll(".third-image-frame")];
+    const retirePrevious=()=>{
+      previous.forEach(frame=>{frame.classList.remove("is-current");frame.classList.add("is-leaving");});
+      setTimeout(()=>previous.forEach(frame=>frame.remove()),IMAGE_FADE_MS+180);
+    };
+    if(!src){retirePrevious();return;}
+    const frame=document.createElement("div");
+    frame.className="third-image-frame";
+    frame.innerHTML=`<img class="third-image-back" src="${src}" alt=""><img class="third-image-front" src="${src}" alt="">`;
+    imageLayer.append(frame);
+    const reveal=()=>{
+      if(generation!==imageGeneration){frame.remove();return;}
+      retirePrevious();
+      requestAnimationFrame(()=>requestAnimationFrame(()=>frame.classList.add("is-current")));
+    };
+    const front=frame.querySelector(".third-image-front");
+    if(front.complete)reveal();
+    else{front.addEventListener("load",reveal,{once:true});front.addEventListener("error",reveal,{once:true});}
   }
   function setScene(next,image="",instant=false){
     if(!instant&&transitioning)return false;
-    const imageChanged=image!==currentImage;
     scene=next;shell.dataset.scene=next;choices.classList.remove("is-visible");showImage(image);
     const a=masks[0].getContext("2d");a.clearRect(0,0,masks[0].width,masks[0].height);a.drawImage(masks[1],0,0);upload(0);composeMask(masks[1],next);upload(1);
     morph=instant?1:0;morphStarted=performance.now();transitioning=!instant;
@@ -113,7 +129,7 @@
       choices.classList.toggle("is-visible",/^choice/.test(scene));
       if(/^choice/.test(scene))pendingAdvance=false;
       else if(pendingAdvance){pendingAdvance=false;requestAnimationFrame(advance);}
-    },imageChanged?IMAGE_MS:MORPH_MS);
+    },MORPH_MS);
     return true;
   }
   function resize(){const mobile=matchMedia("(max-width:760px)").matches,dpr=Math.min(mobile?1.2:1.65,devicePixelRatio||1);canvas.width=Math.round(innerWidth*dpr);canvas.height=Math.round(innerHeight*dpr);const mw=Math.min(1400,canvas.width),mh=Math.min(920,canvas.height);[...masks,shape].forEach(c=>{c.width=mw;c.height=mh;});gl.viewport(0,0,canvas.width,canvas.height);composeMask(masks[1],scene);upload(0);upload(1);}
@@ -127,7 +143,7 @@
   function startThirdSoundtrack(){
     if(!thirdSoundtrack||soundtrackStarting||(!thirdSoundtrack.paused&&thirdSoundtrack.volume>.07))return;
     soundtrackStarting=true;thirdSoundtrack.volume=0;
-    thirdSoundtrack.play().then(()=>{const started=performance.now();const fade=now=>{const p=Math.min(1,(now-started)/1800);thirdSoundtrack.volume=.085*p;if(p<1)requestAnimationFrame(fade);else soundtrackStarting=false;};requestAnimationFrame(fade);}).catch(()=>{soundtrackStarting=false;});
+    thirdSoundtrack.play().then(()=>{const started=performance.now();const fade=now=>{const p=Math.max(0,Math.min(1,(now-started)/1800));thirdSoundtrack.volume=.085*p;if(p<1)requestAnimationFrame(fade);else soundtrackStarting=false;};requestAnimationFrame(fade);}).catch(()=>{soundtrackStarting=false;});
   }
   choices.addEventListener("pointerup",event=>{event.stopPropagation();clickPoint=[event.clientX/innerWidth,1-event.clientY/innerHeight];const b=event.target.closest("button");if(b)choose(b.dataset.choice==="yes");});
   shell.addEventListener("pointermove",event=>{pointer=[event.clientX/innerWidth,1-event.clientY/innerHeight];activity=Math.min(1,activity+.1);});
