@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3d58f" />
-    <meta name="description" content="Интерактивный архив дел" />
-    <title>Архив дел</title>
+    <meta name="description" content="Разбирайте документы с удовольствием!" />
+    <title>Офиис</title>
+    <link id="siteIcon" rel="icon" href="content/Icons/ico1.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Lora:wght@400;500&display=swap" rel="stylesheet" />
@@ -51,25 +52,21 @@
 
       <section class="audiobook" id="audiobook" hidden aria-label="Вторая оболочка">
         <button class="book-back" type="button" aria-label="Вернуться к делам">↑</button>
-        <button class="chapter-menu-button" id="chapterMenuButton" type="button">Глава 1</button>
-        <div class="chapter-menu" id="chapterMenu" hidden>
-          <button type="button" data-chapter="0">01</button><button type="button" data-chapter="1">02</button>
-          <button type="button" data-chapter="2">03</button><button type="button" data-chapter="3">04</button>
-          <button type="button" data-chapter="4">05</button><button type="button" data-chapter="5">06</button>
-          <button type="button" data-chapter="6">07</button><button type="button" data-chapter="7">08</button>
-        </div>
         <div class="book-media" id="bookMedia" aria-hidden="true"></div>
         <div class="book-text" id="bookText" aria-live="off"></div>
         <div class="book-controls">
+          <button class="chapter-skip chapter-backward" type="button" aria-label="Предыдущая глава">←←</button>
           <button class="seek-control seek-back" type="button" aria-label="Назад">←</button>
           <button class="play-control" type="button" aria-label="Пауза">Ⅱ</button>
           <button class="seek-control seek-forward" type="button" aria-label="Вперёд">→</button>
+          <button class="chapter-skip chapter-forward" type="button" aria-label="Следующая глава">→→</button>
         </div>
         <div class="chapter-intro" id="chapterIntro" aria-hidden="true">
           <div>Глава <span class="chapter-intro-number">1</span></div>
           <strong class="chapter-intro-title"></strong>
         </div>
         <audio id="narration" preload="metadata"></audio>
+        <audio id="bookSoundtrack" loop preload="auto"></audio>
       </section>
 
       <div class="instruction" id="instruction" role="dialog" aria-modal="true" aria-labelledby="instructionTitle">
@@ -84,6 +81,7 @@
 
       <audio id="officeMusic" src="content/Soundtrack/Офис.mp3" loop preload="auto"></audio>
     </main>
+    <div class="shell-transition" id="shellTransition" aria-hidden="true"></div>
     <script src="content/cases.js"></script>
     <script src="content/book.js"></script>
     <script src="content/word-timings.js"></script>

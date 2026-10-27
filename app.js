@@ -32,26 +32,30 @@ const audiobook = document.querySelector("#audiobook");
 const narration = document.querySelector("#narration");
 const bookText = document.querySelector("#bookText");
 const bookMedia = document.querySelector("#bookMedia");
-const chapterMenuButton = document.querySelector("#chapterMenuButton");
-const chapterMenu = document.querySelector("#chapterMenu");
 const chapterIntro = document.querySelector("#chapterIntro");
+const bookSoundtrack = document.querySelector("#bookSoundtrack");
+const shellTransition = document.querySelector("#shellTransition");
+const descriptionMeta = document.querySelector('meta[name="description"]');
+const siteIcon = document.querySelector("#siteIcon");
 let currentBookChapter = 0;
 let currentMediaIndex = -1;
 let seekTimer;
 let seekStartedAt = 0;
 let chapterIntroTimer;
 let chapterLoadToken = 0;
+let thirdTransitionStarted = false;
 
 const CHAPTER_MEDIA = [
-  [{ at: 0, src: "content/ImagesPart2/CH1_Start.JPG" }, { at: .62, src: "content/VideosPart2/CH1.MP4" }],
-  [{ at: 0, src: "content/ImagesPart2/CH2_House.JPG" }, { at: .55, src: "content/VideosPart2/CH2-CH3.MP4" }],
-  [{ at: 0, src: "content/ImagesPart2/CH3_Illness.png" }, { at: .37, src: "content/VideosPart2/CH2-CH3.MP4" }, { at: .7, src: "content/ImagesPart2/CH3_Semen.JPG" }],
-  [{ at: 0, src: "content/ImagesPart2/CH4_Seek.JPG" }, { at: .51, src: "content/ImagesPart2/CH4_Soldiers.JPG" }, { at: .78, src: "content/VideosPart2/CH4-CH5.MP4" }],
-  [{ at: 0, src: "content/ImagesPart2/CH5_Doctor.PNG" }, { at: .36, src: "content/ImagesPart2/CH5_House.PNG" }, { at: .72, src: "content/VideosPart2/CH4-CH5.MP4" }],
-  [{ at: 0, src: "content/ImagesPart2/CH6_Walk.JPG" }, { at: .18, src: "content/ImagesPart2/CH6_Mountain.JPG" }, { at: .38, src: "content/ImagesPart2/CH6_Club.JPG" }, { at: .55, src: "content/ImagesPart2/CH6_Problem.JPG" }, { at: .72, src: "content/ImagesPart2/CH6_Bird.JPG" }, { at: .86, src: "content/VideosPart2/CH6-CH8.MP4" }],
-  [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4" }],
-  [{ at: 0, src: "content/ImagesPart2/CH8_Sphere.png" }, { at: .35, src: "content/ImagesPart2/CH8_Destruct.png" }, { at: .62, src: "content/ImagesPart2/CH8_Cataclism.png" }, { at: .82, src: "content/VideosPart2/Final.mp4" }],
+  [{ at: 0, src: "content/VideosPart2/Start.mp4", intro: true }, { at: 10, src: "content/ImagesPart2/CH1_Start.JPG" }, { at: .62, src: "content/VideosPart2/CH1.MP4", loop: true }],
+  [{ at: 0, src: "content/VideosPart2/CH2-CH3.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH2_House.JPG" }],
+  [{ at: 0, src: "content/VideosPart2/CH2-CH3.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH3_Illness.png" }, { at: .7, src: "content/ImagesPart2/CH3_Semen.JPG" }],
+  [{ at: 0, src: "content/VideosPart2/CH4-CH5.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH4_Soldiers.JPG" }, { at: 254, src: "content/ImagesPart2/CH4_Seek.JPG" }],
+  [{ at: 0, src: "content/VideosPart2/CH4-CH5.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH5_Doctor.PNG" }, { at: .4, src: "content/ImagesPart2/CH5_House.PNG" }],
+  [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH6_Walk.JPG" }, { at: .2, src: "content/ImagesPart2/CH6_Mountain.JPG" }, { at: .38, src: "content/ImagesPart2/CH6_Club.JPG" }, { at: .55, src: "content/ImagesPart2/CH6_Problem.JPG" }, { at: .74, src: "content/ImagesPart2/CH6_Bird.JPG" }],
+  [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4", intro: true }],
+  [{ at: 0, src: "content/ImagesPart2/CH8_Cataclism.png" }, { at: .72, src: "content/VideosPart2/Final.mp4" }],
 ];
+const CHAPTER_SOUNDTRACKS = ["Начало", "В лесу", "Деревня", "Незнакомец", "Дом", "Побег", "Лаборатория", "Главная тема"];
 let activeCase = 0;
 let audioContext;
 let isAnimating = false;
@@ -136,8 +140,7 @@ function documentMarkup(canvas, docIndex) {
 function thumbMarkup(canvas, docIndex, label) {
   const text = documentText(+canvas.dataset.case, docIndex);
   const preview = escapeHTML(text);
-  const fontSize = Math.max(.72, Math.min(4.6, 2.8 * Math.sqrt(500 / text.length)));
-  return `<button class="paper-thumb" style="--thumb-font:${fontSize.toFixed(2)}px" type="button" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Открыть документ ${docIndex + 1}">${preview}</button>`;
+  return `<button class="paper-thumb" type="button" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Открыть документ ${docIndex + 1}">${preview}</button>`;
 }
 
 function captureSheets(canvas) {
@@ -262,6 +265,44 @@ function fadeMusic(target, duration = 1400) {
   requestAnimationFrame(tick);
 }
 
+function fadeAudio(audio, target, duration = 900) {
+  const start = audio.volume;
+  const started = performance.now();
+  const tick = now => {
+    const progress = Math.min(1, (now - started) / duration);
+    audio.volume = start + (target - start) * progress;
+    if (progress < 1) requestAnimationFrame(tick);
+    else if (target === 0) audio.pause();
+  };
+  requestAnimationFrame(tick);
+}
+
+function enterThirdPage() {
+  if (thirdTransitionStarted) return;
+  thirdTransitionStarted = true;
+  saveChapterProgress();
+  narration.pause();
+  fadeAudio(bookSoundtrack, 0, 900);
+  shellTransition.classList.add("is-active");
+  window.setTimeout(() => {
+    window.location.href = "third.html";
+  }, 1250);
+}
+
+function setShellMetadata(shell) {
+  const isBook = shell === "book";
+  const isThird = shell === "third";
+  document.title = isThird ? "?" : isBook ? "Доктор. Дневник" : "Офиис";
+  descriptionMeta.content = isThird ? "Много вопросов" : isBook ? "Может пора начать вести дневник?" : "Разбирайте документы с удовольствием!";
+  siteIcon.href = `content/Icons/ico${isThird ? 3 : isBook ? 2 : 1}.ico`;
+}
+
+function playChapterSoundtrack(index) {
+  bookSoundtrack.src = `content/Soundtrack/${CHAPTER_SOUNDTRACKS[index]}.mp3`;
+  bookSoundtrack.volume = 0;
+  bookSoundtrack.play().then(() => fadeAudio(bookSoundtrack, .045, 1800)).catch(() => {});
+}
+
 async function startMusic() {
   if (!officeMusic.paused) return;
   officeMusic.volume = 0;
@@ -318,9 +359,25 @@ function timingForChapter(index) {
 
 function renderBookText(index) {
   let wordIndex = 0;
-  bookText.innerHTML = BOOK_DATA[index].text.split(/(\s+)/).map(token => {
-    if (/^\s+$/.test(token)) return token.includes("\n\n") ? '<span class="book-paragraph-break"></span>' : " ";
-    return `<span class="book-word" data-word-index="${wordIndex++}">${escapeHTML(token)}</span>`;
+  let blockIndex = 0;
+  const blockSize = window.matchMedia("(max-width: 760px)").matches ? 58 : 105;
+  const paragraphs = BOOK_DATA[index].text.split(/\n+/).map(paragraph => paragraph.trim()).filter(Boolean);
+  bookText.innerHTML = paragraphs.flatMap((paragraph, paragraphIndex) => {
+    const tokens = paragraph.split(/\s+/).filter(Boolean);
+    const blocks = [];
+    for (let offset = 0; offset < tokens.length; offset += blockSize) {
+      const slice = tokens.slice(offset, offset + blockSize);
+      const start = wordIndex;
+      const words = slice.map((token, tokenIndex) => {
+        const clean = token.toLocaleLowerCase("ru").replace(/[^а-яёa-z-]/gi, "");
+        const noBreakAfter = /^(а|без|в|во|для|до|за|и|из|к|ко|на|над|не|ни|о|об|от|по|под|при|про|с|со|у|через)$/i.test(clean);
+        const separator = tokenIndex < slice.length - 1 ? (noBreakAfter ? "&nbsp;" : " ") : "";
+        return `<span class="book-word" data-word-index="${wordIndex++}">${escapeHTML(token)}</span>${separator}`;
+      }).join("");
+      const paragraphEnd = offset + blockSize >= tokens.length ? " is-paragraph-end" : "";
+      blocks.push(`<p class="book-paragraph${paragraphEnd}" data-paragraph="${paragraphIndex}" data-block="${blockIndex++}" data-start="${start}" data-end="${wordIndex - 1}">${words}</p>`);
+    }
+    return blocks;
   }).join("");
 }
 
@@ -335,28 +392,52 @@ function updateBookProgress() {
     else high = middle - 1;
   }
   const current = low;
-  const visibleTrail = window.matchMedia("(max-width: 760px)").matches ? 58 : 145;
+  const paragraphs = [...bookText.querySelectorAll(".book-paragraph")];
+  const matchedParagraph = paragraphs.findLastIndex(paragraph => +paragraph.dataset.start <= current);
+  const currentParagraph = Math.max(0, matchedParagraph);
+  const paragraphStart = +paragraphs[currentParagraph]?.dataset.start || 0;
+  const previousExpiresAt = (timings[paragraphStart]?.start || 0) + 2;
+  paragraphs.forEach((paragraph, index) => {
+    paragraph.classList.toggle("is-current", index === currentParagraph);
+    paragraph.classList.toggle("is-previous", index === currentParagraph - 1 && narration.currentTime < previousExpiresAt);
+    paragraph.classList.toggle("is-gone", index < currentParagraph - 1 || (index === currentParagraph - 1 && narration.currentTime >= previousExpiresAt));
+    paragraph.classList.toggle("is-upcoming", index > currentParagraph);
+  });
+
   bookText.querySelectorAll(".book-word").forEach((element, index) => {
-    element.classList.toggle("is-old", index < current - visibleTrail);
-    element.classList.toggle("is-spoken", index >= current - visibleTrail && index < current);
+    element.classList.remove("is-old");
+    element.classList.toggle("is-spoken", index < current);
     element.classList.toggle("is-current", index === current);
   });
 
   const media = CHAPTER_MEDIA[currentBookChapter];
   const duration = narration.duration || timings.at(-1)?.end || 1;
-  const progress = narration.currentTime / duration;
   let nextMediaIndex = 0;
-  media.forEach((cue, index) => { if (progress >= cue.at) nextMediaIndex = index; });
+  media.forEach((cue, index) => {
+    const cueTime = cue.at <= 1 ? cue.at * duration : cue.at;
+    if (narration.currentTime >= cueTime) nextMediaIndex = index;
+  });
   if (nextMediaIndex !== currentMediaIndex) showChapterMedia(nextMediaIndex);
+
+  const introVideo = bookMedia.querySelector("video[data-intro]");
+  if (introVideo) {
+    const firstWordFinished = current > 0 || narration.currentTime >= (timings[0]?.end || Infinity);
+    bookMedia.classList.toggle("is-live", firstWordFinished);
+  }
+  if (introVideo && narration.currentTime < 10 && Math.abs(introVideo.currentTime - narration.currentTime) > .55) {
+    introVideo.currentTime = narration.currentTime;
+  }
 }
 
 function showChapterMedia(index) {
   currentMediaIndex = index;
-  const source = CHAPTER_MEDIA[currentBookChapter][index]?.src;
+  const cue = CHAPTER_MEDIA[currentBookChapter][index];
+  const source = cue?.src;
   if (!source) return;
+  bookMedia.classList.toggle("is-live", !cue.intro);
   if (/\.mp4$/i.test(source)) {
-    bookMedia.innerHTML = `<video src="${source}" muted autoplay loop playsinline></video>`;
-    bookMedia.querySelector("video")?.play().catch(() => {});
+    bookMedia.innerHTML = `<video src="${source}" muted ${cue.intro ? "data-intro" : "autoplay"} ${cue.loop ? "loop" : ""} playsinline></video>`;
+    if (!cue.intro || !narration.paused) bookMedia.querySelector("video")?.play().catch(() => {});
   } else {
     bookMedia.innerHTML = `<img src="${source}" alt="">`;
   }
@@ -381,11 +462,11 @@ function loadBookChapter(index, withIntro = true) {
   currentBookChapter = Math.max(0, Math.min(BOOK_DATA.length - 1, index));
   currentMediaIndex = -1;
   narration.pause();
+  bookMedia.classList.remove("is-live");
   narration.src = `content/AudioPart2/Record${currentBookChapter + 1}.m4a`;
-  chapterMenuButton.textContent = `Глава ${currentBookChapter + 1}`;
-  chapterMenu.querySelectorAll("button").forEach(button => button.classList.toggle("is-current", +button.dataset.chapter === currentBookChapter));
   renderBookText(currentBookChapter);
   showChapterMedia(0);
+  playChapterSoundtrack(currentBookChapter);
   narration.addEventListener("loadedmetadata", () => {
     if (loadToken !== chapterLoadToken) return;
     const saved = Number(localStorage.getItem(chapterProgressKey(currentBookChapter))) || 0;
@@ -399,6 +480,7 @@ function loadBookChapter(index, withIntro = true) {
 function enterAudiobook(chapterIndex = 0) {
   localStorage.setItem("audiobook-visited", "1");
   fadeMusic(0, 700);
+  setShellMetadata("book");
   audiobook.hidden = false;
   loadBookChapter(chapterIndex, true);
 }
@@ -409,7 +491,9 @@ function leaveAudiobook() {
   chapterIntro.classList.remove("is-visible");
   saveChapterProgress();
   narration.pause();
+  fadeAudio(bookSoundtrack, 0, 700);
   audiobook.hidden = true;
+  setShellMetadata("office");
   if (currentBookChapter <= 5) {
     setCase(currentBookChapter);
     startMusic();
@@ -420,7 +504,16 @@ function leaveAudiobook() {
 
 function seekNarration(direction, heldFor = 0) {
   const amount = heldFor > 4200 ? 18 : heldFor > 2200 ? 9 : heldFor > 900 ? 5 : 2.5;
-  narration.currentTime = Math.max(0, Math.min(narration.duration || Infinity, narration.currentTime + direction * amount));
+  const target = narration.currentTime + direction * amount;
+  if (target < 0 && currentBookChapter > 0) {
+    loadBookChapter(currentBookChapter - 1, true);
+    return;
+  }
+  if (target >= narration.duration && currentBookChapter < BOOK_DATA.length - 1) {
+    loadBookChapter(currentBookChapter + 1, true);
+    return;
+  }
+  narration.currentTime = Math.max(0, Math.min(narration.duration || Infinity, target));
   updateBookProgress();
 }
 
@@ -439,11 +532,6 @@ function bindSeekControl(button, direction) {
 }
 
 document.querySelector(".book-back").addEventListener("click", leaveAudiobook);
-chapterMenuButton.addEventListener("click", () => { chapterMenu.hidden = !chapterMenu.hidden; });
-chapterMenu.querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
-  chapterMenu.hidden = true;
-  loadBookChapter(+button.dataset.chapter, true);
-}));
 document.querySelector(".play-control").addEventListener("click", event => {
   if (narration.paused) narration.play().catch(() => {});
   else narration.pause();
@@ -452,12 +540,36 @@ document.querySelector(".play-control").addEventListener("click", event => {
 });
 bindSeekControl(document.querySelector(".seek-back"), -1);
 bindSeekControl(document.querySelector(".seek-forward"), 1);
+document.querySelector(".chapter-backward").addEventListener("click", () => {
+  if (currentBookChapter > 0) loadBookChapter(currentBookChapter - 1, true);
+  else {
+    narration.currentTime = 0;
+    updateBookProgress();
+  }
+});
+document.querySelector(".chapter-forward").addEventListener("click", () => {
+  if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
+  else enterThirdPage();
+});
 narration.addEventListener("timeupdate", () => { updateBookProgress(); saveChapterProgress(); });
-narration.addEventListener("play", () => { document.querySelector(".play-control").textContent = "Ⅱ"; });
-narration.addEventListener("pause", () => { document.querySelector(".play-control").textContent = "▶"; });
+narration.addEventListener("play", () => {
+  document.querySelector(".play-control").textContent = "Ⅱ";
+  bookMedia.querySelector("video")?.play().catch(() => {});
+  bookSoundtrack.play().catch(() => {});
+});
+narration.addEventListener("pause", () => {
+  document.querySelector(".play-control").textContent = "▶";
+  bookMedia.querySelector("video")?.pause();
+  bookSoundtrack.pause();
+});
 narration.addEventListener("ended", () => {
   if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
-  else { audiobook.hidden = true; show404(); }
+  else enterThirdPage();
+});
+
+window.addEventListener("pageshow", () => {
+  thirdTransitionStarted = false;
+  shellTransition.classList.remove("is-active");
 });
 
 document.querySelector(".down-arrow").addEventListener("click", () => {
@@ -476,6 +588,7 @@ buildCorruptionBars();
 
 returnHome.addEventListener("click", () => {
   hasReturned = true;
+  setShellMetadata("office");
   story.classList.remove("show-404");
   notFound.setAttribute("aria-hidden", "true");
   document.querySelector(".down-arrow").innerHTML = `<span>↓</span><span class="return-note">эта стрелочка всегда тут была?</span>`;

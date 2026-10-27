@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="Много вопросов" />
+    <title>?</title>
+    <link rel="icon" href="content/Icons/ico3.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="third-page">
+    <main class="third-shell" id="thirdShell" hidden aria-label="Третья оболочка">
+      <canvas class="language-canvas" id="languageCanvas" aria-hidden="true"></canvas>
+      <div class="third-image" id="thirdImage" aria-hidden="true"></div>
+      <div class="third-credits" id="thirdCredits" aria-hidden="true">
+        <p>Автор лонгрида</p>
+        <strong>Тарас Балабаев</strong>
+        <p>Курировал</p>
+        <strong>Олег Пащенко</strong>
+      </div>
+      <p class="third-hint" id="thirdHint" hidden></p>
+    </main>
+    <audio id="thirdSoundtrack" preload="auto"></audio>
+    <script src="third-shell.js"></script>
+    <script>
+      window.enterThirdShell(document.querySelector("#thirdSoundtrack"));
+    </script>
+  </body>
+</html>
