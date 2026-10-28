@@ -36,6 +36,8 @@ const chapterIntro = document.querySelector("#chapterIntro");
 const bookSoundtrack = document.querySelector("#bookSoundtrack");
 const shellTransition = document.querySelector("#shellTransition");
 const descriptionMeta = document.querySelector('meta[name="description"]');
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
 const siteIcon = document.querySelector("#siteIcon");
 let currentBookChapter = 0;
 let currentMediaIndex = -1;
@@ -58,6 +60,8 @@ const CHAPTER_MEDIA = [
   [{ at: 0, src: "content/ImagesPart2/CH8_Cataclism.png" }, { at: .72, src: "content/VideosPart2/Final.mp4" }],
 ];
 const CHAPTER_SOUNDTRACKS = ["Начало", "В лесу", "Деревня", "Незнакомец", "Дом", "Побег", "Лаборатория", "Главная тема"];
+const OFFICE_THEME_COLORS = ["#f3d58f", "#f3d58f", "#f2bd72", "#fa4d76", "#3c0b1e", "#080808"];
+const BOOK_SOUNDTRACK_VOLUME = .018;
 let activeCase = 0;
 let audioContext;
 let isAnimating = false;
@@ -190,13 +194,13 @@ function documentMarkup(canvas, docIndex) {
   const caseIndex = +canvas.dataset.case;
   const label = getState(canvas).labels[docIndex];
   const paragraphs = escapeHTML(documentText(caseIndex, docIndex)).replaceAll("\n", "<br>");
-  return `<article class="document is-active" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Документ ${docIndex + 1}">${paragraphs}</article>`;
+  return `<article class="document is-active" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Документ ${docIndex + 1}"><div class="sheet-content">${paragraphs}</div></article>`;
 }
 
 function thumbMarkup(canvas, docIndex, label) {
   const text = documentText(+canvas.dataset.case, docIndex);
-  const preview = escapeHTML(text);
-  return `<button class="paper-thumb" type="button" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Открыть документ ${docIndex + 1}">${preview}</button>`;
+  const preview = escapeHTML(text).replaceAll("\n", "<br>");
+  return `<button class="paper-thumb" type="button" data-doc="${docIndex}" ${label ? `data-label="${label}"` : ""} aria-label="Открыть документ ${docIndex + 1}"><span class="sheet-content">${preview}</span></button>`;
 }
 
 function captureSheets(canvas) {
@@ -206,43 +210,137 @@ function captureSheets(canvas) {
   ]));
 }
 
+function fitSheetText(element, minimum) {
+  if (!element || element.scrollHeight <= element.clientHeight) return;
+  const maximum = parseFloat(getComputedStyle(element).fontSize) || 16;
+  let low = minimum;
+  let high = maximum;
+  for (let step = 0; step < 8; step++) {
+    const middle = (low + high) / 2;
+    element.style.fontSize = `${middle}px`;
+    if (element.scrollHeight <= element.clientHeight) low = middle;
+    else high = middle;
+  }
+  element.style.fontSize = `${Math.max(minimum, low - .06).toFixed(2)}px`;
+}
+
+function sizeDocument(element) {
+  if (!element) return;
+  const stage = element.parentElement;
+  const viewportWidth = window.innerWidth;
+  const preferredWidth = viewportWidth <= 760
+    ? Math.min(viewportWidth * .82, 500)
+    : viewportWidth <= 1100
+      ? Math.min(viewportWidth * .54, 470)
+      : Math.min(viewportWidth * .31, 580);
+  const width = Math.max(1, Math.min(preferredWidth, stage.clientWidth, stage.clientHeight * .72));
+  element.style.width = `${width}px`;
+  element.style.height = `${width / .72}px`;
+  element.style.setProperty("--sheet-scale", width / 500);
+}
+
+function sizeThumbnail(element) {
+  if (!element) return;
+  element.style.setProperty("--sheet-scale", element.clientWidth / 500);
+}
+
+function sheetMotion(caseIndex) {
+  if (caseIndex === 3) return { duration: 560, easing: "cubic-bezier(.4,0,.2,1)", mode: "interface" };
+  if (caseIndex >= 4) return { duration: 820, easing: "cubic-bezier(.58,-.08,.2,1.08)", mode: "uneasy" };
+  return { duration: 920, easing: "cubic-bezier(.22,.72,.16,1)", mode: "physical" };
+}
+
+function makeFlyingSheet(start, finish) {
+  const clone = document.createElement("div");
+  const flipper = document.createElement("div");
+  const front = document.createElement("div");
+  const back = document.createElement("div");
+  clone.className = "flying-sheet";
+  flipper.className = "flying-sheet__flipper";
+  front.className = "flying-sheet__face flying-sheet__front";
+  back.className = "flying-sheet__face flying-sheet__back";
+  const sourceContent = start.element.querySelector(".sheet-content");
+  const movingContent = sourceContent.cloneNode(true);
+  movingContent.className = "flying-sheet__content";
+  front.replaceChildren(movingContent);
+  const finishStyle = getComputedStyle(finish.element);
+  const background = finishStyle.backgroundColor === "rgba(0, 0, 0, 0)" ? start.style.backgroundColor : finishStyle.backgroundColor;
+  Object.assign(clone.style, {
+    left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`,
+  });
+  clone.style.setProperty("--sheet-background", background);
+  clone.style.setProperty("--sheet-color", finishStyle.color);
+  const sourceContentStyle = getComputedStyle(sourceContent);
+  movingContent.style.fontSize = sourceContentStyle.fontSize;
+  flipper.append(front, back);
+  clone.append(flipper);
+  document.body.append(clone);
+  return { clone, flipper };
+}
+
 function animateReflow(canvas, mutate) {
-  if (isAnimating) return;
+  if (isAnimating) return 0;
   isAnimating = true;
   const before = captureSheets(canvas);
   mutate();
   renderCanvas(canvas);
   const after = captureSheets(canvas);
-  const clones = [];
+  const flights = [];
+  const motion = sheetMotion(+canvas.dataset.case);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duration = reduced ? 1 : motion.duration;
 
   before.forEach((start, key) => {
     const finish = after.get(key);
     if (!finish) return;
-    const clone = start.element.cloneNode(true);
-    clone.className = "flying-sheet";
-    Object.assign(clone.style, {
-      left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`,
-      padding: start.style.padding, fontSize: start.style.fontSize, lineHeight: start.style.lineHeight,
-      backgroundColor: start.style.backgroundColor, color: start.style.color,
-    });
-    document.body.append(clone);
+    const dx = finish.rect.left - start.rect.left;
+    const dy = finish.rect.top - start.rect.top;
+    const sx = finish.rect.width / Math.max(1, start.rect.width);
+    const sy = finish.rect.height / Math.max(1, start.rect.height);
+    const changesRole = start.element.classList.contains("document") || finish.element.classList.contains("document");
+    const visiblyMoved = Math.abs(dx) > 2 || Math.abs(dy) > 2 || Math.abs(sx - 1) > .015 || Math.abs(sy - 1) > .015;
+    if (!changesRole && !visiblyMoved) return;
+    const { clone, flipper } = makeFlyingSheet(start, finish);
     finish.element.style.visibility = "hidden";
-    clones.push({ clone, finish });
+    const outerFrames = motion.mode === "uneasy"
+      ? [
+          { left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, transform: "rotateZ(0deg)" },
+          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .4 - 8}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, transform: "rotateZ(-1deg)", offset: .44 },
+          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .6 + 5}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, transform: "rotateZ(.6deg)", offset: .56 },
+          { left: `${finish.rect.left}px`, top: `${finish.rect.top}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, transform: "rotateZ(0deg)" },
+        ]
+      : [
+          { left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px` },
+          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .44 - (motion.mode === "physical" ? 8 : 0)}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, offset: .44 },
+          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .56 - (motion.mode === "physical" ? 8 : 0)}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, offset: .56 },
+          { left: `${finish.rect.left}px`, top: `${finish.rect.top}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px` },
+        ];
+    clone.animate(outerFrames, { duration, easing: motion.easing, fill: "forwards" });
+    const movingContent = clone.querySelector(".flying-sheet__content");
+    const startScale = start.rect.width / 500;
+    const finishScale = finish.rect.width / 500;
+    movingContent.animate([
+      { transform: `scale(${startScale})` },
+      { transform: `scale(${startScale})`, offset: .44 },
+      { transform: `scale(${finishScale})`, offset: .56 },
+      { transform: `scale(${finishScale})` },
+    ], { duration, easing: motion.easing, fill: "forwards" });
+    if (changesRole) {
+      flipper.animate(
+        motion.mode === "uneasy"
+          ? [{ transform: "rotateY(0deg)" }, { transform: "rotateY(168deg)", offset: .46 }, { transform: "rotateY(194deg)", offset: .55 }, { transform: "rotateY(360deg)" }]
+          : [{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)", offset: .5 }, { transform: "rotateY(360deg)" }],
+        { duration, easing: motion.mode === "uneasy" ? "cubic-bezier(.4,0,.3,1)" : "cubic-bezier(.45,0,.55,1)", fill: "forwards" },
+      );
+    }
+    flights.push({ clone, finish });
   });
 
-  requestAnimationFrame(() => requestAnimationFrame(() => clones.forEach(({ clone, finish }) => {
-    const end = finish.rect;
-    Object.assign(clone.style, {
-      left: `${end.left}px`, top: `${end.top}px`, width: `${end.width}px`, height: `${end.height}px`,
-      padding: finish.style.padding, fontSize: finish.style.fontSize, lineHeight: finish.style.lineHeight,
-      backgroundColor: finish.style.backgroundColor, color: finish.style.color,
-    });
-  })));
-
   window.setTimeout(() => {
-    clones.forEach(({ clone, finish }) => { clone.remove(); finish.element.style.visibility = ""; });
+    flights.forEach(({ clone, finish }) => { clone.remove(); finish.element.style.visibility = ""; });
     isAnimating = false;
-  }, 760);
+  }, duration + 30);
+  return duration;
 }
 
 function renderCanvas(canvas) {
@@ -253,12 +351,19 @@ function renderCanvas(canvas) {
   const sorted = all.filter(index => index !== state.active && state.labels[index]);
   const stage = canvas.querySelector(".document-stage");
 
-  stage.innerHTML = state.active === null ? `<p class="all-sorted">Все материалы отсортированы.<br>Выберите лист справа, чтобы вернуться к нему.</p>` : documentMarkup(canvas, state.active);
+  stage.innerHTML = state.active === null ? `<p class="all-sorted">Все материалы отсортированы.<br>Выберите лист справа, чтобы вернуться к нему.</p>` : documentMarkup(canvas, state.active);
   canvas.querySelector(".pending-thumbs").innerHTML = pending.map(index => thumbMarkup(canvas, index)).join("");
   canvas.querySelector(".sorted-thumbs").innerHTML = sorted.map(index => thumbMarkup(canvas, index, state.labels[index])).join("");
   canvas.querySelectorAll(".label-button").forEach(button => {
     button.disabled = state.active === null;
     button.classList.toggle("is-selected", state.active !== null && button.dataset.label === state.labels[state.active]);
+  });
+  const documentElement = stage.querySelector(".document");
+  sizeDocument(documentElement);
+  fitSheetText(documentElement?.querySelector(".sheet-content"), 7.5);
+  canvas.querySelectorAll(".paper-thumb").forEach(thumb => {
+    sizeThumbnail(thumb);
+    fitSheetText(thumb.querySelector(".sheet-content"), 7.5);
   });
 }
 
@@ -276,13 +381,13 @@ function sortActive(canvas, label) {
   const state = getState(canvas);
   if (state.active === null) return;
   playPaperSound();
-  animateReflow(canvas, () => {
+  const duration = animateReflow(canvas, () => {
     state.labels[state.active] = label;
     const nextPending = CASES[+canvas.dataset.case].documents.findIndex((_, index) => index !== state.active && !state.labels[index]);
     state.active = nextPending === -1 ? null : nextPending;
   });
   persistOfficeState();
-  window.setTimeout(() => setCase(activeCase), 780);
+  window.setTimeout(() => setCase(activeCase), duration + 40);
 }
 
 restoreOfficeDocuments();
@@ -294,6 +399,9 @@ track.querySelectorAll(".case-canvas").forEach(canvas => {
     if (label) sortActive(canvas, label.dataset.label);
     else if (thumb) exchangeDocument(canvas, +thumb.dataset.doc);
   });
+});
+document.fonts?.ready.then(() => {
+  if (!isAnimating) track.querySelectorAll(".case-canvas").forEach(renderCanvas);
 });
 
 function setCase(index, shouldPersist = true) {
@@ -309,6 +417,7 @@ function setCase(index, shouldPersist = true) {
   title.textContent = `${CORRUPTED_CASE_TITLES[activeCase]} дело`;
   prev.disabled = activeCase === 0;
   next.disabled = Object.keys(getState(track.children[activeCase]).labels).length === 0;
+  if (audiobook.hidden) setThemeColor(OFFICE_THEME_COLORS[activeCase]);
   if (!officeMusic.paused) fadeMusic([.16, .15, .13, .11, .08, .055][activeCase], 1100);
   if (shouldPersist) persistOfficeState();
 }
@@ -355,18 +464,80 @@ function enterThirdPage() {
   }, 1250);
 }
 
+function setThemeColor(color) {
+  if (themeColorMeta) themeColorMeta.content = color;
+  if (statusBarMeta) statusBarMeta.content = color === "#000000" || color === "#080808" ? "black" : "default";
+}
+
 function setShellMetadata(shell) {
   const isBook = shell === "book";
   const isThird = shell === "third";
   document.title = isThird ? "?" : isBook ? "Доктор. Дневник" : "Офиис";
   descriptionMeta.content = isThird ? "Много вопросов" : isBook ? "Может пора начать вести дневник?" : "Разбирайте документы с удовольствием!";
   siteIcon.href = `content/Icons/ico${isThird ? 3 : isBook ? 2 : 1}.ico`;
+  setThemeColor(isThird ? "#ffffff" : isBook ? "#000000" : OFFICE_THEME_COLORS[activeCase]);
 }
 
 function playChapterSoundtrack(index, shouldPlay = true) {
   bookSoundtrack.src = `content/Soundtrack/${CHAPTER_SOUNDTRACKS[index]}.mp3`;
-  bookSoundtrack.volume = shouldPlay ? 0 : .045;
-  if (shouldPlay) bookSoundtrack.play().then(() => fadeAudio(bookSoundtrack, .045, 1800)).catch(() => {});
+  bookSoundtrack.volume = 0;
+  if (!shouldPlay) bookSoundtrack.pause();
+}
+
+function updateMediaSession() {
+  if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
+  const chapter = BOOK_DATA[currentBookChapter];
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: `Глава ${currentBookChapter + 1}. ${chapter.title}`,
+    artist: "Доктор. Дневник",
+    album: "Пагуба",
+  });
+  navigator.mediaSession.playbackState = narration.paused ? "paused" : "playing";
+  updateMediaPosition();
+}
+
+function updateMediaPosition() {
+  if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") return;
+  if (!Number.isFinite(narration.duration) || narration.duration <= 0) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: narration.duration,
+      playbackRate: narration.playbackRate || 1,
+      position: Math.min(narration.currentTime, narration.duration),
+    });
+  } catch (_) { /* Metadata remains available when position state is unsupported. */ }
+}
+
+function clearMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.playbackState = "none";
+  navigator.mediaSession.metadata = null;
+}
+
+function setupMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  const bind = (action, handler) => {
+    try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) { /* Browser does not expose this action. */ }
+  };
+  bind("play", () => narration.play().catch(() => {}));
+  bind("pause", () => narration.pause());
+  bind("stop", () => narration.pause());
+  bind("previoustrack", () => {
+    if (currentBookChapter > 0) loadBookChapter(currentBookChapter - 1, true);
+    else { narration.currentTime = 0; updateBookProgress(); }
+  });
+  bind("nexttrack", () => {
+    if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
+    else enterThirdPage();
+  });
+  bind("seekbackward", details => seekNarration(-1, details?.seekOffset >= 15 ? 4300 : 1000));
+  bind("seekforward", details => seekNarration(1, details?.seekOffset >= 15 ? 4300 : 1000));
+  bind("seekto", details => {
+    if (!Number.isFinite(details.seekTime) || !Number.isFinite(narration.duration)) return;
+    narration.currentTime = Math.max(0, Math.min(narration.duration, details.seekTime));
+    updateBookProgress();
+    updateMediaPosition();
+  });
 }
 
 async function startMusic() {
@@ -379,6 +550,7 @@ function show404() {
   story.classList.add("show-404");
   notFound.setAttribute("aria-hidden", "false");
   fadeMusic(0, 1800);
+  setThemeColor("#000000");
 }
 
 function buildCorruptionBars() {
@@ -531,6 +703,7 @@ function loadBookChapter(index, withIntro = true, autoplay = true) {
   narration.pause();
   bookMedia.classList.remove("is-live");
   narration.src = `content/AudioPart2/Record${currentBookChapter + 1}.m4a`;
+  updateMediaSession();
   renderBookText(currentBookChapter);
   showChapterMedia(0);
   playChapterSoundtrack(currentBookChapter, autoplay);
@@ -540,6 +713,7 @@ function loadBookChapter(index, withIntro = true, autoplay = true) {
     try { saved = Number(localStorage.getItem(chapterProgressKey(currentBookChapter))) || 0; } catch (_) { /* Start at the beginning. */ }
     narration.currentTime = Math.min(saved, Math.max(0, narration.duration - .1));
     updateBookProgress();
+    updateMediaSession();
     if (withIntro) showChapterIntro(currentBookChapter);
     else if (autoplay) narration.play().catch(() => {});
   }, { once: true });
@@ -560,6 +734,7 @@ function leaveAudiobook() {
   saveChapterProgress();
   narration.pause();
   fadeAudio(bookSoundtrack, 0, 700);
+  clearMediaSession();
   audiobook.hidden = true;
   setShellMetadata("office");
   if (currentBookChapter <= 5) {
@@ -620,21 +795,28 @@ document.querySelector(".chapter-forward").addEventListener("click", () => {
   if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
   else enterThirdPage();
 });
-narration.addEventListener("timeupdate", () => { updateBookProgress(); saveChapterProgress(); });
+narration.addEventListener("timeupdate", () => { updateBookProgress(); saveChapterProgress(); updateMediaPosition(); });
 narration.addEventListener("play", () => {
   document.querySelector(".play-control").textContent = "Ⅱ";
   bookMedia.querySelector("video")?.play().catch(() => {});
-  bookSoundtrack.play().catch(() => {});
+  updateMediaSession();
+  bookSoundtrack.play().then(() => {
+    fadeAudio(bookSoundtrack, BOOK_SOUNDTRACK_VOLUME, 2200);
+    updateMediaSession();
+  }).catch(() => {});
 });
 narration.addEventListener("pause", () => {
   document.querySelector(".play-control").textContent = "▶";
   bookMedia.querySelector("video")?.pause();
   bookSoundtrack.pause();
+  if (audiobook.hidden || thirdTransitionStarted) clearMediaSession();
+  else updateMediaSession();
 });
 narration.addEventListener("ended", () => {
   if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
   else enterThirdPage();
 });
+setupMediaSession();
 
 window.addEventListener("pageshow", () => {
   thirdTransitionStarted = false;
@@ -679,7 +861,14 @@ document.addEventListener("pointerdown", () => {
 
 prev.addEventListener("click", () => setCase(activeCase - 1));
 next.addEventListener("click", () => setCase(activeCase + 1));
-window.addEventListener("resize", () => setCase(activeCase, audiobook.hidden));
+let resizeTimer;
+window.addEventListener("resize", () => {
+  window.clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    setCase(activeCase, audiobook.hidden);
+    if (!isAnimating) track.querySelectorAll(".case-canvas").forEach(renderCanvas);
+  }, 80);
+});
 window.addEventListener("keydown", event => {
   if (!audiobook.hidden || !instruction.hidden || exitRoute.classList.contains("is-open") || story.classList.contains("show-404")) return;
   if (event.key === "ArrowLeft") prev.click();

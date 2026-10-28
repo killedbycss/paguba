@@ -4,11 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3d58f" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="description" content="Разбирайте документы с удовольствием!" />
     <title>Офиис</title>
     <link id="siteIcon" rel="icon" href="content/Icons/ico1.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&amp;family=Lora:wght@400;500&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;display=swap" rel="stylesheet" />
@@ -29,6 +31,14 @@
       <section class="not-found" id="notFound" aria-hidden="true">
         <div class="not-found-code">404</div>
         <button class="return-home" id="returnHome" type="button">хотите вернуться на главную?</button>
+        <footer class="course-webring course-webring--404">
+          <h2>Веб-ринг</h2>
+          <nav class="course-webring__nav" aria-label="Веб-ринг проектов">
+            <a target="_top" href="https://1zumink.github.io/let-me-out-v2/" rel="prev">← Let me out — Илья Ланг</a>
+            <a target="_top" href="https://conclaveobscurum.ru/soyalice/">Все проекты</a>
+            <a target="_top" href="https://zdarzuzz.github.io/za-avatarkoi/" rel="next">Человек в твоих глазах — Дарья Зюзина →</a>
+          </nav>
+        </footer>
       </section>
 
       <section class="exit-route" id="exitRoute" aria-hidden="true">
@@ -66,7 +76,7 @@
           <strong class="chapter-intro-title"></strong>
         </div>
         <audio id="narration" preload="metadata"></audio>
-        <audio id="bookSoundtrack" loop preload="auto"></audio>
+        <audio id="bookSoundtrack" loop preload="auto" disableRemotePlayback></audio>
       </section>
 
       <div class="instruction" id="instruction" role="dialog" aria-modal="true" aria-labelledby="instructionTitle">
