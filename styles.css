@@ -377,7 +377,7 @@ button { font: inherit; }
 .exit-step-one { display: grid; place-content: center; justify-items: stretch; gap: 26px; background: #c9c0ad; }
 .exit-question { width: min(460px, 78vw); padding: 55px 50px; border-radius: 65px; background: #fff; font-size: clamp(31px, 2.5vw, 50px); font-weight: 700; line-height: 1.16; }
 .exit-return { width: 100%; padding: 26px; border: 0; border-radius: 60px; background: #1182f5; color: #fff; font-size: clamp(28px, 2.5vw, 50px); font-weight: 700; cursor: pointer; }
-.exit-next { position: absolute; border: 0; background: none; font: 400 34px/1 var(--ui); cursor: pointer; }
+.exit-next { position: absolute; border: 0; background: none; color: #fff; font: 400 34px/1 var(--ui); cursor: pointer; }
 .exit-next-down { left: 3.8vw; bottom: 4vh; }
 .exit-step-two { display: grid; place-content: center; justify-items: stretch; gap: 46px; background: #666; }
 .exit-step-two .exit-question { width: min(930px, 76vw); padding: 90px 65px; text-align: center; }
@@ -494,7 +494,7 @@ button { font: inherit; }
 .case-nav {
   position: absolute;
   left: 50%;
-  bottom: calc(clamp(12px, 2.5vh, 30px) + 8px);
+  bottom: clamp(12px, 2.5vh, 30px);
   display: flex;
   align-items: center;
   gap: clamp(12px, 1.5vw, 28px);
@@ -541,7 +541,7 @@ button { font: inherit; }
   .label-button img { height: clamp(14px, 2.4vh, 21px); }
   .label-button:hover, .label-button.is-selected { transform: translateX(-5px); }
   .document-stage { inset: 17% 3% 16% 3%; }
-  .document { --document-width: min(82vw, 500px, calc(72vh - 136.8px)); --document-height: min(113.8889vw, 694.44px, calc(100vh - 190px)); padding: clamp(24px, 7vw, 40px); font-size: var(--document-font-size); line-height: 1.25; }
+  .document { --document-width: min(82vw, 500px, calc(72vh - 136.8px)); --document-height: min(113.8889vw, 694.44px, calc(100vh - 190px)); padding: 0; }
   .tray { bottom: 7.2%; }
   .tray { --thumb-tray-height: 68px; }
   .tray-pending { left: 4%; width: 48%; }
@@ -552,7 +552,7 @@ button { font: inherit; }
   .case-nav { bottom: 7px; gap: 5px; }
   .case-title { font-size: 13px; }
   .nav-arrow { font-size: 20px; }
-  .down-arrow { left: 12px; bottom: 10px; display: flex; align-items: flex-end; gap: 5px; padding-bottom: 0; font: 400 20px/1 var(--ui); }
+  .down-arrow { left: 12px; bottom: 17px; display: flex; align-items: flex-end; gap: 5px; padding-bottom: 0; font: 400 20px/1 var(--ui); }
   .return-note { margin-left: 0; max-width: 120px; padding-bottom: 1px; font-size: 8px; line-height: 1.15; white-space: normal; text-align: left; }
   .instruction { gap: 18px; }
   .instruction-card { padding: 38px 30px; border-radius: 38px; }

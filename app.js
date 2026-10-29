@@ -36,7 +36,7 @@ const chapterIntro = document.querySelector("#chapterIntro");
 const bookSoundtrack = document.querySelector("#bookSoundtrack");
 const shellTransition = document.querySelector("#shellTransition");
 const descriptionMeta = document.querySelector('meta[name="description"]');
-const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+let themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
 const siteIcon = document.querySelector("#siteIcon");
 let currentBookChapter = 0;
@@ -60,7 +60,8 @@ const CHAPTER_MEDIA = [
   [{ at: 0, src: "content/ImagesPart2/CH8_Cataclism.png" }, { at: .72, src: "content/VideosPart2/Final.mp4" }],
 ];
 const CHAPTER_SOUNDTRACKS = ["Начало", "В лесу", "Деревня", "Незнакомец", "Дом", "Побег", "Лаборатория", "Главная тема"];
-const OFFICE_THEME_COLORS = ["#f3d58f", "#f3d58f", "#f2bd72", "#fa4d76", "#3c0b1e", "#080808"];
+const CHAPTER_COVERS = Array.from({ length: 8 }, (_, index) => `content/BookChapters/cover${index + 1}.png`);
+const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
 const BOOK_SOUNDTRACK_VOLUME = .018;
 let activeCase = 0;
 let audioContext;
@@ -265,9 +266,16 @@ function makeFlyingSheet(start, finish) {
   front.replaceChildren(movingContent);
   const finishStyle = getComputedStyle(finish.element);
   const background = finishStyle.backgroundColor === "rgba(0, 0, 0, 0)" ? start.style.backgroundColor : finishStyle.backgroundColor;
+  const startStyle = start.style;
+  const startShadow = startStyle.boxShadow === "none" ? "0 0 0 rgba(20,20,20,0)" : startStyle.boxShadow;
+  const finishShadow = finishStyle.boxShadow === "none" ? "0 0 0 rgba(20,20,20,0)" : finishStyle.boxShadow;
   Object.assign(clone.style, {
     left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`,
   });
+  // Match the final canvas stacking from the first frame: trays sit above the
+  // central stage. This prevents the flying clones from swapping depth when
+  // they are replaced by their real elements at the end of the animation.
+  clone.style.zIndex = finish.element.classList.contains("paper-thumb") ? "103" : finish.element.classList.contains("document") ? "102" : "101";
   clone.style.setProperty("--sheet-background", background);
   clone.style.setProperty("--sheet-color", finishStyle.color);
   const sourceContentStyle = getComputedStyle(sourceContent);
@@ -275,7 +283,7 @@ function makeFlyingSheet(start, finish) {
   flipper.append(front, back);
   clone.append(flipper);
   document.body.append(clone);
-  return { clone, flipper };
+  return { clone, flipper, faces: [front, back], startShadow, finishShadow };
 }
 
 function animateReflow(canvas, mutate) {
@@ -300,7 +308,7 @@ function animateReflow(canvas, mutate) {
     const changesRole = start.element.classList.contains("document") || finish.element.classList.contains("document");
     const visiblyMoved = Math.abs(dx) > 2 || Math.abs(dy) > 2 || Math.abs(sx - 1) > .015 || Math.abs(sy - 1) > .015;
     if (!changesRole && !visiblyMoved) return;
-    const { clone, flipper } = makeFlyingSheet(start, finish);
+    const { clone, flipper, faces, startShadow, finishShadow } = makeFlyingSheet(start, finish);
     finish.element.style.visibility = "hidden";
     const outerFrames = motion.mode === "uneasy"
       ? [
@@ -316,6 +324,11 @@ function animateReflow(canvas, mutate) {
           { left: `${finish.rect.left}px`, top: `${finish.rect.top}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px` },
         ];
     clone.animate(outerFrames, { duration, easing: motion.easing, fill: "forwards" });
+    faces.forEach(face => face.animate([
+      { boxShadow: startShadow },
+      { boxShadow: "0 24px 54px rgba(20,20,20,.18)", offset: .48 },
+      { boxShadow: finishShadow },
+    ], { duration, easing: "cubic-bezier(.22,.72,.16,1)", fill: "forwards" }));
     const movingContent = clone.querySelector(".flying-sheet__content");
     const startScale = start.rect.width / 500;
     const finishScale = finish.rect.width / 500;
@@ -465,7 +478,14 @@ function enterThirdPage() {
 }
 
 function setThemeColor(color) {
-  if (themeColorMeta) themeColorMeta.content = color;
+  document.documentElement.style.backgroundColor = color;
+  document.body.style.backgroundColor = color;
+  if (themeColorMeta && themeColorMeta.content !== color) {
+    const replacement = themeColorMeta.cloneNode();
+    replacement.content = color;
+    themeColorMeta.replaceWith(replacement);
+    themeColorMeta = replacement;
+  }
   if (statusBarMeta) statusBarMeta.content = color === "#000000" || color === "#080808" ? "black" : "default";
 }
 
@@ -491,6 +511,11 @@ function updateMediaSession() {
     title: `Глава ${currentBookChapter + 1}. ${chapter.title}`,
     artist: "Доктор. Дневник",
     album: "Пагуба",
+    artwork: [{
+      src: new URL(CHAPTER_COVERS[currentBookChapter], window.location.href).href,
+      sizes: "1000x1000",
+      type: "image/png",
+    }],
   });
   navigator.mediaSession.playbackState = narration.paused ? "paused" : "playing";
   updateMediaPosition();
