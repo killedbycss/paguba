@@ -14,11 +14,18 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&amp;family=Lora:wght@400;500&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20261030l" />
   </head>
   <body>
     <main class="story" aria-label="Архив из шести дел">
       <div class="case-track" id="caseTrack"></div>
+
+      <a class="case-accessibility" id="caseAccessibility" href="accessible.html" aria-label="Открыть доступную текстовую версию" hidden>
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="5.5" r="3"></circle>
+          <path d="M7 11.5c5.8 2.4 12.2 2.4 18 0M16 9v8m0 0-5 10m5-10 5 10M10.5 14.5 8 22m13.5-7.5L24 22"></path>
+        </svg>
+      </a>
 
       <button class="down-arrow" type="button" aria-label="Продолжить — пока недоступно">↓</button>
 
@@ -75,7 +82,7 @@
           <div>Глава <span class="chapter-intro-number">1</span></div>
           <strong class="chapter-intro-title"></strong>
         </div>
-        <audio id="narration" preload="metadata"></audio>
+        <audio id="narration" preload="auto"></audio>
         <audio id="bookSoundtrack" loop preload="auto" disableRemotePlayback></audio>
       </section>
 
@@ -86,6 +93,7 @@
           <p>Работайте в своё удовольствие!</p>
         </div>
         <button class="instruction-start" id="instructionStart" type="button">Приступить!</button>
+        <a class="instruction-accessibility" href="accessible.html">Текстовая версия</a>
         <strong class="sound-warning">внимание! звуковые эффекты</strong>
       </div>
 
@@ -95,6 +103,6 @@
     <script src="content/cases.js"></script>
     <script src="content/book.js"></script>
     <script src="content/word-timings.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=20261030l"></script>
   </body>
 </html>

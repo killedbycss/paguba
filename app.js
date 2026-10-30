@@ -35,16 +35,19 @@ const bookMedia = document.querySelector("#bookMedia");
 const chapterIntro = document.querySelector("#chapterIntro");
 const bookSoundtrack = document.querySelector("#bookSoundtrack");
 const shellTransition = document.querySelector("#shellTransition");
+const caseAccessibility = document.querySelector("#caseAccessibility");
 const descriptionMeta = document.querySelector('meta[name="description"]');
 let themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-const siteIcon = document.querySelector("#siteIcon");
+let siteIcon = document.querySelector("#siteIcon");
 let currentBookChapter = 0;
 let currentMediaIndex = -1;
 let seekTimer;
 let seekStartedAt = 0;
 let chapterIntroTimer;
 let chapterLoadToken = 0;
+let chapterPreloader;
+let progressSaveTimer;
 let thirdTransitionStarted = false;
 const EXPERIENCE_KEY = "paguba-experience-v1";
 const audioFadeTokens = new WeakMap();
@@ -56,13 +59,25 @@ const CHAPTER_MEDIA = [
   [{ at: 0, src: "content/VideosPart2/CH4-CH5.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH4_Soldiers.JPG" }, { at: 254, src: "content/ImagesPart2/CH4_Seek.JPG" }],
   [{ at: 0, src: "content/VideosPart2/CH4-CH5.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH5_Doctor.PNG" }, { at: .4, src: "content/ImagesPart2/CH5_House.PNG" }],
   [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4", intro: true }, { at: 10, src: "content/ImagesPart2/CH6_Walk.JPG" }, { at: .2, src: "content/ImagesPart2/CH6_Mountain.JPG" }, { at: .38, src: "content/ImagesPart2/CH6_Club.JPG" }, { at: .55, src: "content/ImagesPart2/CH6_Problem.JPG" }, { at: .74, src: "content/ImagesPart2/CH6_Bird.JPG" }],
-  [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4", intro: true }],
+  [{ at: 0, src: "content/VideosPart2/CH6-CH8.MP4", intro: true, loop: true }],
   [{ at: 0, src: "content/ImagesPart2/CH8_Cataclism.png" }, { at: .72, src: "content/VideosPart2/Final.mp4" }],
 ];
 const CHAPTER_SOUNDTRACKS = ["Начало", "В лесу", "Деревня", "Незнакомец", "Дом", "Побег", "Лаборатория", "Главная тема"];
 const CHAPTER_COVERS = Array.from({ length: 8 }, (_, index) => `content/BookChapters/cover${index + 1}.png`);
+const CHAPTER_ICONS = Array.from({ length: 8 }, (_, index) => `content/Icons/chapters/chapter-${index + 1}.png`);
+const CHAPTER_ARTWORK_SIZES = [96, 128, 256, 512];
+const CHAPTER_AUDIO = [
+  "content/AudioPart2/Record1-trimmed.m4a",
+  "content/AudioPart2/Record2-trimmed.m4a",
+  "content/AudioPart2/Record3-trimmed.m4a",
+  "content/AudioPart2/Record4-trimmed.m4a",
+  "content/AudioPart2/Record5-trimmed.m4a",
+  "content/AudioPart2/Record6-corrected.m4a",
+  "content/AudioPart2/Record7-trimmed.m4a",
+  "content/AudioPart2/Record8.m4a",
+];
 const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
-const BOOK_SOUNDTRACK_VOLUME = .018;
+const BOOK_SOUNDTRACK_VOLUME = .01;
 let activeCase = 0;
 let audioContext;
 let isAnimating = false;
@@ -205,10 +220,15 @@ function thumbMarkup(canvas, docIndex, label) {
 }
 
 function captureSheets(canvas) {
-  return new Map([...canvas.querySelectorAll("[data-doc]")].map(element => [
-    element.dataset.doc,
-    { element, rect: element.getBoundingClientRect(), style: getComputedStyle(element) },
-  ]));
+  return new Map([...canvas.querySelectorAll("[data-doc]")].map(element => {
+    const computed = getComputedStyle(element);
+    return [element.dataset.doc, {
+      element,
+      rect: element.getBoundingClientRect(),
+      style: { backgroundColor: computed.backgroundColor, color: computed.color, boxShadow: computed.boxShadow },
+      contentFontSize: parseFloat(getComputedStyle(element.querySelector(".sheet-content")).fontSize) || 16,
+    }];
+  }));
 }
 
 function fitSheetText(element, minimum) {
@@ -246,12 +266,12 @@ function sizeThumbnail(element) {
 }
 
 function sheetMotion(caseIndex) {
-  if (caseIndex === 3) return { duration: 560, easing: "cubic-bezier(.4,0,.2,1)", mode: "interface" };
-  if (caseIndex >= 4) return { duration: 820, easing: "cubic-bezier(.58,-.08,.2,1.08)", mode: "uneasy" };
-  return { duration: 920, easing: "cubic-bezier(.22,.72,.16,1)", mode: "physical" };
+  if (caseIndex === 3) return { duration: 720, easing: "cubic-bezier(.32,.05,.2,1)", mode: "interface" };
+  if (caseIndex >= 4) return { duration: 1020, easing: "cubic-bezier(.46,-.04,.18,1.04)", mode: "uneasy" };
+  return { duration: 1120, easing: "cubic-bezier(.2,.68,.14,1)", mode: "physical" };
 }
 
-function makeFlyingSheet(start, finish) {
+function makeFlyingSheet(start, finish, depth) {
   const clone = document.createElement("div");
   const flipper = document.createElement("div");
   const front = document.createElement("div");
@@ -261,29 +281,35 @@ function makeFlyingSheet(start, finish) {
   front.className = "flying-sheet__face flying-sheet__front";
   back.className = "flying-sheet__face flying-sheet__back";
   const sourceContent = start.element.querySelector(".sheet-content");
-  const movingContent = sourceContent.cloneNode(true);
-  movingContent.className = "flying-sheet__content";
-  front.replaceChildren(movingContent);
-  const finishStyle = getComputedStyle(finish.element);
-  const background = finishStyle.backgroundColor === "rgba(0, 0, 0, 0)" ? start.style.backgroundColor : finishStyle.backgroundColor;
+  const finishContent = finish.element.querySelector(".sheet-content");
+  const frontContent = sourceContent.cloneNode(true);
+  const backContent = finishContent.cloneNode(true);
+  frontContent.className = "flying-sheet__content";
+  backContent.className = "flying-sheet__content";
+  front.replaceChildren(frontContent);
+  back.replaceChildren(backContent);
+  const finishStyle = finish.style;
+  const startBackground = start.style.backgroundColor;
+  const finishBackground = finishStyle.backgroundColor === "rgba(0, 0, 0, 0)" ? startBackground : finishStyle.backgroundColor;
   const startStyle = start.style;
   const startShadow = startStyle.boxShadow === "none" ? "0 0 0 rgba(20,20,20,0)" : startStyle.boxShadow;
   const finishShadow = finishStyle.boxShadow === "none" ? "0 0 0 rgba(20,20,20,0)" : finishStyle.boxShadow;
   Object.assign(clone.style, {
     left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`,
   });
-  // Match the final canvas stacking from the first frame: trays sit above the
-  // central stage. This prevents the flying clones from swapping depth when
-  // they are replaced by their real elements at the end of the animation.
-  clone.style.zIndex = finish.element.classList.contains("paper-thumb") ? "103" : finish.element.classList.contains("document") ? "102" : "101";
-  clone.style.setProperty("--sheet-background", background);
-  clone.style.setProperty("--sheet-color", finishStyle.color);
-  const sourceContentStyle = getComputedStyle(sourceContent);
-  movingContent.style.fontSize = sourceContentStyle.fontSize;
+  // Keep every flying sheet in one stable layer. The destination takes over
+  // only after the animation, so its depth never changes during the flight.
+  clone.style.zIndex = String(depth);
+  front.style.backgroundColor = startBackground;
+  front.style.color = start.style.color;
+  back.style.backgroundColor = finishBackground;
+  back.style.color = finishStyle.color;
+  frontContent.style.fontSize = `${start.contentFontSize}px`;
+  backContent.style.fontSize = `${finish.contentFontSize}px`;
   flipper.append(front, back);
   clone.append(flipper);
   document.body.append(clone);
-  return { clone, flipper, faces: [front, back], startShadow, finishShadow };
+  return { clone, flipper, front, back, frontContent, backContent, startShadow, finishShadow };
 }
 
 function animateReflow(canvas, mutate) {
@@ -297,6 +323,10 @@ function animateReflow(canvas, mutate) {
   const motion = sheetMotion(+canvas.dataset.case);
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const duration = reduced ? 1 : motion.duration;
+  const roleChangeInReflow = [...before].some(([key, start]) => {
+    const finish = after.get(key);
+    return finish && (start.element.classList.contains("document") !== finish.element.classList.contains("document"));
+  });
 
   before.forEach((start, key) => {
     const finish = after.get(key);
@@ -307,42 +337,48 @@ function animateReflow(canvas, mutate) {
     const sy = finish.rect.height / Math.max(1, start.rect.height);
     const changesRole = start.element.classList.contains("document") || finish.element.classList.contains("document");
     const visiblyMoved = Math.abs(dx) > 2 || Math.abs(dy) > 2 || Math.abs(sx - 1) > .015 || Math.abs(sy - 1) > .015;
-    if (!changesRole && !visiblyMoved) return;
-    const { clone, flipper, faces, startShadow, finishShadow } = makeFlyingSheet(start, finish);
+    if (!changesRole && !visiblyMoved && !roleChangeInReflow) return;
+    const startsAsDocument = start.element.classList.contains("document");
+    const endsAsDocument = finish.element.classList.contains("document");
+    const isUnchangedThumbnail = !startsAsDocument && !endsAsDocument;
+    const depth = isUnchangedThumbnail ? 10003 : startsAsDocument ? 10002 : endsAsDocument ? 10001 : 10000;
+    const { clone, flipper, front, back, frontContent, backContent, startShadow, finishShadow } = makeFlyingSheet(start, finish, depth);
     finish.element.style.visibility = "hidden";
+    const widthAt = progress => start.rect.width + (finish.rect.width - start.rect.width) * progress;
+    const heightAt = progress => start.rect.height + (finish.rect.height - start.rect.height) * progress;
     const outerFrames = motion.mode === "uneasy"
       ? [
           { left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, transform: "rotateZ(0deg)" },
-          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .4 - 8}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, transform: "rotateZ(-1deg)", offset: .44 },
-          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .6 + 5}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, transform: "rotateZ(.6deg)", offset: .56 },
+          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .42 - 3}px`, width: `${widthAt(.44)}px`, height: `${heightAt(.44)}px`, transform: "rotateZ(-.55deg)", offset: .44 },
+          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .58 + 2}px`, width: `${widthAt(.56)}px`, height: `${heightAt(.56)}px`, transform: "rotateZ(.35deg)", offset: .56 },
           { left: `${finish.rect.left}px`, top: `${finish.rect.top}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, transform: "rotateZ(0deg)" },
         ]
       : [
           { left: `${start.rect.left}px`, top: `${start.rect.top}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px` },
-          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .44 - (motion.mode === "physical" ? 8 : 0)}px`, width: `${start.rect.width}px`, height: `${start.rect.height}px`, offset: .44 },
-          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .56 - (motion.mode === "physical" ? 8 : 0)}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px`, offset: .56 },
+          { left: `${start.rect.left + dx * .44}px`, top: `${start.rect.top + dy * .44 - (motion.mode === "physical" ? 3 : 0)}px`, width: `${widthAt(.44)}px`, height: `${heightAt(.44)}px`, offset: .44 },
+          { left: `${start.rect.left + dx * .56}px`, top: `${start.rect.top + dy * .56 - (motion.mode === "physical" ? 3 : 0)}px`, width: `${widthAt(.56)}px`, height: `${heightAt(.56)}px`, offset: .56 },
           { left: `${finish.rect.left}px`, top: `${finish.rect.top}px`, width: `${finish.rect.width}px`, height: `${finish.rect.height}px` },
         ];
     clone.animate(outerFrames, { duration, easing: motion.easing, fill: "forwards" });
-    faces.forEach(face => face.animate([
+    [front, back].forEach(face => face.animate([
       { boxShadow: startShadow },
-      { boxShadow: "0 24px 54px rgba(20,20,20,.18)", offset: .48 },
+      { boxShadow: "0 22px 50px rgba(20,20,20,.17)", offset: .38 },
+      { boxShadow: "0 15px 36px rgba(20,20,20,.12)", offset: .7 },
       { boxShadow: finishShadow },
-    ], { duration, easing: "cubic-bezier(.22,.72,.16,1)", fill: "forwards" }));
-    const movingContent = clone.querySelector(".flying-sheet__content");
+    ], { duration, easing: "cubic-bezier(.3,.1,.25,1)", fill: "forwards" }));
     const startScale = start.rect.width / 500;
     const finishScale = finish.rect.width / 500;
-    movingContent.animate([
+    [frontContent, backContent].forEach(content => content.animate([
       { transform: `scale(${startScale})` },
-      { transform: `scale(${startScale})`, offset: .44 },
-      { transform: `scale(${finishScale})`, offset: .56 },
+      { transform: `scale(${startScale + (finishScale - startScale) * .44})`, offset: .44 },
+      { transform: `scale(${startScale + (finishScale - startScale) * .56})`, offset: .56 },
       { transform: `scale(${finishScale})` },
-    ], { duration, easing: motion.easing, fill: "forwards" });
+    ], { duration, easing: motion.easing, fill: "forwards" }));
     if (changesRole) {
       flipper.animate(
         motion.mode === "uneasy"
-          ? [{ transform: "rotateY(0deg)" }, { transform: "rotateY(168deg)", offset: .46 }, { transform: "rotateY(194deg)", offset: .55 }, { transform: "rotateY(360deg)" }]
-          : [{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)", offset: .5 }, { transform: "rotateY(360deg)" }],
+          ? [{ transform: "rotateY(0deg)" }, { transform: "rotateY(168deg)", offset: .78 }, { transform: "rotateY(186deg)", offset: .9 }, { transform: "rotateY(180deg)" }]
+          : [{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }],
         { duration, easing: motion.mode === "uneasy" ? "cubic-bezier(.4,0,.3,1)" : "cubic-bezier(.45,0,.55,1)", fill: "forwards" },
       );
     }
@@ -430,6 +466,8 @@ function setCase(index, shouldPersist = true) {
   title.textContent = `${CORRUPTED_CASE_TITLES[activeCase]} дело`;
   prev.disabled = activeCase === 0;
   next.disabled = Object.keys(getState(track.children[activeCase]).labels).length === 0;
+  caseAccessibility.hidden = hasReturned ? activeCase !== 0 : activeCase > 1;
+  caseAccessibility.href = `accessible.html#chapter-${activeCase + 1}`;
   if (audiobook.hidden) setThemeColor(OFFICE_THEME_COLORS[activeCase]);
   if (!officeMusic.paused) fadeMusic([.16, .15, .13, .11, .08, .055][activeCase], 1100);
   if (shouldPersist) persistOfficeState();
@@ -489,12 +527,23 @@ function setThemeColor(color) {
   if (statusBarMeta) statusBarMeta.content = color === "#000000" || color === "#080808" ? "black" : "default";
 }
 
+function setSiteIcon(src, type = "image/png") {
+  const replacement = document.createElement("link");
+  replacement.id = "siteIcon";
+  replacement.rel = "icon";
+  replacement.type = type;
+  replacement.href = src;
+  siteIcon.replaceWith(replacement);
+  siteIcon = replacement;
+}
+
 function setShellMetadata(shell) {
   const isBook = shell === "book";
   const isThird = shell === "third";
   document.title = isThird ? "?" : isBook ? "Доктор. Дневник" : "Офиис";
   descriptionMeta.content = isThird ? "Много вопросов" : isBook ? "Может пора начать вести дневник?" : "Разбирайте документы с удовольствием!";
-  siteIcon.href = `content/Icons/ico${isThird ? 3 : isBook ? 2 : 1}.ico`;
+  if (isBook) setSiteIcon(CHAPTER_ICONS[currentBookChapter]);
+  else setSiteIcon(`content/Icons/ico${isThird ? 3 : 1}.ico`, "image/x-icon");
   setThemeColor(isThird ? "#ffffff" : isBook ? "#000000" : OFFICE_THEME_COLORS[activeCase]);
 }
 
@@ -511,11 +560,11 @@ function updateMediaSession() {
     title: `Глава ${currentBookChapter + 1}. ${chapter.title}`,
     artist: "Доктор. Дневник",
     album: "Пагуба",
-    artwork: [{
-      src: new URL(CHAPTER_COVERS[currentBookChapter], window.location.href).href,
-      sizes: "1000x1000",
+    artwork: CHAPTER_ARTWORK_SIZES.map(size => ({
+      src: new URL(`content/Icons/chapters/chapter-${currentBookChapter + 1}-${size}.png`, window.location.href).href,
+      sizes: `${size}x${size}`,
       type: "image/png",
-    }],
+    })),
   });
   navigator.mediaSession.playbackState = narration.paused ? "paused" : "playing";
   updateMediaPosition();
@@ -566,9 +615,12 @@ function setupMediaSession() {
 }
 
 async function startMusic() {
-  if (!officeMusic.paused) return;
-  officeMusic.volume = 0;
-  try { await officeMusic.play(); fadeMusic(.16, 2200); } catch (_) { /* Begins on the next user gesture. */ }
+  const target = [.16, .15, .13, .11, .08, .055][activeCase];
+  if (officeMusic.paused) {
+    officeMusic.volume = 0;
+    try { await officeMusic.play(); } catch (_) { return; }
+  }
+  fadeMusic(target, 1800);
 }
 
 function show404() {
@@ -600,12 +652,52 @@ function closeExitRoute() {
 }
 
 function chapterProgressKey(index) {
-  return `audiobook-progress-${index + 1}`;
+  // The edited narration files have different timelines; never restore a
+  // position recorded against the previous masters.
+  return `audiobook-progress-v2-${index + 1}`;
+}
+
+function chapterResumeThreshold(index) {
+  const sentences = BOOK_DATA[index].text.match(/[^.!?]+[.!?]+/g) || [];
+  const opening = sentences.slice(0, 2).join(" ");
+  const openingWordCount = (opening.match(/\S+/g) || []).length;
+  const timings = window.WORD_TIMINGS?.[index];
+  return timings?.[Math.max(0, openingWordCount - 1)]?.end || 0;
+}
+
+function readChapterProgress(index) {
+  const key = chapterProgressKey(index);
+  try {
+    const saved = Number(localStorage.getItem(key)) || 0;
+    if (saved < chapterResumeThreshold(index)) {
+      localStorage.removeItem(key);
+      return 0;
+    }
+    return saved;
+  } catch (_) {
+    return 0;
+  }
 }
 
 function saveChapterProgress() {
   if (!narration.getAttribute("src") || !Number.isFinite(narration.currentTime)) return;
-  try { localStorage.setItem(chapterProgressKey(currentBookChapter), String(narration.currentTime)); } catch (_) { /* Optional persistence. */ }
+  const key = chapterProgressKey(currentBookChapter);
+  try {
+    if (narration.currentTime < chapterResumeThreshold(currentBookChapter)) localStorage.removeItem(key);
+    else localStorage.setItem(key, String(narration.currentTime));
+  } catch (_) { /* Optional persistence. */ }
+}
+
+function startProgressSaving() {
+  clearInterval(progressSaveTimer);
+  saveChapterProgress();
+  progressSaveTimer = window.setInterval(saveChapterProgress, 1000);
+}
+
+function stopProgressSaving() {
+  clearInterval(progressSaveTimer);
+  progressSaveTimer = null;
+  saveChapterProgress();
 }
 
 function chapterWords(index) {
@@ -699,49 +791,118 @@ function showChapterMedia(index) {
   if (!source) return;
   bookMedia.classList.toggle("is-live", !cue.intro);
   if (/\.mp4$/i.test(source)) {
-    bookMedia.innerHTML = `<video src="${source}" muted ${cue.intro ? "data-intro" : "autoplay"} ${cue.loop ? "loop" : ""} playsinline></video>`;
-    if (!cue.intro || !narration.paused) bookMedia.querySelector("video")?.play().catch(() => {});
+    const video = document.createElement("video");
+    video.src = source;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.loop = Boolean(cue.loop);
+    video.controls = false;
+    video.disablePictureInPicture = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.setAttribute("disableRemotePlayback", "");
+    if (cue.intro) video.dataset.intro = "";
+    bookMedia.replaceChildren(video);
+    if (!narration.paused) video.play().catch(() => {});
   } else {
     bookMedia.innerHTML = `<img src="${source}" alt="">`;
   }
 }
 
-function showChapterIntro(index) {
+function showChapterIntro(index, onComplete) {
   clearTimeout(chapterIntroTimer);
   chapterIntro.querySelector(".chapter-intro-number").textContent = index + 1;
-  chapterIntro.querySelector(".chapter-intro-title").textContent = BOOK_DATA[index].title;
+  chapterIntro.querySelector(".chapter-intro-title").textContent = BOOK_DATA[index].title
+    .replace(/(^|\s)([\u0410-Яа-яЁёA-Za-z]{1,2})\s+/g, "$1$2\u00a0");
+  chapterIntro.setAttribute("aria-hidden", "false");
   chapterIntro.classList.remove("is-visible");
   void chapterIntro.offsetWidth;
   chapterIntro.classList.add("is-visible");
   chapterIntroTimer = window.setTimeout(() => {
     chapterIntro.classList.remove("is-visible");
-    narration.play().catch(() => {});
+    chapterIntro.setAttribute("aria-hidden", "true");
+    onComplete?.();
   }, 2700);
 }
 
 function loadBookChapter(index, withIntro = true, autoplay = true) {
   const loadToken = ++chapterLoadToken;
+  clearTimeout(chapterIntroTimer);
+  chapterIntro.classList.remove("is-visible");
+  chapterIntro.setAttribute("aria-hidden", "true");
   saveChapterProgress();
+  audiobook.classList.add("is-preparing");
+  audiobook.classList.remove("is-loading");
   currentBookChapter = Math.max(0, Math.min(BOOK_DATA.length - 1, index));
+  setSiteIcon(CHAPTER_ICONS[currentBookChapter]);
+  document.title = `Глава ${currentBookChapter + 1}. ${BOOK_DATA[currentBookChapter].title} — Доктор. Дневник`;
   persistBookLocation();
   currentMediaIndex = -1;
   narration.pause();
   bookMedia.classList.remove("is-live");
-  narration.src = `content/AudioPart2/Record${currentBookChapter + 1}.m4a`;
-  updateMediaSession();
+  narration.src = CHAPTER_AUDIO[currentBookChapter];
   renderBookText(currentBookChapter);
   showChapterMedia(0);
   playChapterSoundtrack(currentBookChapter, autoplay);
+  updateMediaSession();
+
+  let introFinished = !withIntro;
+  let audioReady = narration.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+  let restored = false;
+  const revealChapter = () => {
+    if (loadToken !== chapterLoadToken) return;
+    audiobook.classList.remove("is-preparing", "is-loading");
+    updateBookProgress();
+  };
+  const beginWhenReady = () => {
+    if (loadToken !== chapterLoadToken || !introFinished) return;
+    audiobook.classList.toggle("is-loading", !audioReady);
+    if (!audioReady) return;
+    audiobook.classList.remove("is-loading");
+    if (autoplay) {
+      narration.addEventListener("playing", revealChapter, { once: true });
+      narration.play().catch(() => {
+        revealChapter();
+        // iOS may require the next explicit gesture after a restored tab.
+        document.querySelector(".play-control").textContent = "▶";
+      });
+    } else revealChapter();
+    if (currentBookChapter < BOOK_DATA.length - 1) {
+      chapterPreloader = new Audio();
+      chapterPreloader.preload = "metadata";
+      chapterPreloader.src = CHAPTER_AUDIO[currentBookChapter + 1];
+    }
+  };
+
+  if (withIntro) showChapterIntro(currentBookChapter, () => {
+    introFinished = true;
+    beginWhenReady();
+  });
+
   narration.addEventListener("loadedmetadata", () => {
     if (loadToken !== chapterLoadToken) return;
-    let saved = 0;
-    try { saved = Number(localStorage.getItem(chapterProgressKey(currentBookChapter))) || 0; } catch (_) { /* Start at the beginning. */ }
+    const saved = readChapterProgress(currentBookChapter);
     narration.currentTime = Math.min(saved, Math.max(0, narration.duration - .1));
+    restored = true;
     updateBookProgress();
     updateMediaSession();
-    if (withIntro) showChapterIntro(currentBookChapter);
-    else if (autoplay) narration.play().catch(() => {});
   }, { once: true });
+  const markReady = () => {
+    if (loadToken !== chapterLoadToken) return;
+    if (audioReady) return;
+    audioReady = true;
+    if (!restored && Number.isFinite(narration.duration)) {
+      const saved = readChapterProgress(currentBookChapter);
+      narration.currentTime = Math.min(saved, Math.max(0, narration.duration - .1));
+    }
+    beginWhenReady();
+  };
+  narration.addEventListener("loadeddata", markReady, { once: true });
+  narration.addEventListener("canplay", markReady, { once: true });
+  narration.load();
+  if (!withIntro) beginWhenReady();
 }
 
 function enterAudiobook(chapterIndex = 0, withIntro = true, autoplay = true) {
@@ -756,6 +917,7 @@ function leaveAudiobook() {
   chapterLoadToken += 1;
   clearTimeout(chapterIntroTimer);
   chapterIntro.classList.remove("is-visible");
+  audiobook.classList.remove("is-preparing", "is-loading");
   saveChapterProgress();
   narration.pause();
   fadeAudio(bookSoundtrack, 0, 700);
@@ -822,6 +984,7 @@ document.querySelector(".chapter-forward").addEventListener("click", () => {
 });
 narration.addEventListener("timeupdate", () => { updateBookProgress(); saveChapterProgress(); updateMediaPosition(); });
 narration.addEventListener("play", () => {
+  startProgressSaving();
   document.querySelector(".play-control").textContent = "Ⅱ";
   bookMedia.querySelector("video")?.play().catch(() => {});
   updateMediaSession();
@@ -831,6 +994,10 @@ narration.addEventListener("play", () => {
   }).catch(() => {});
 });
 narration.addEventListener("pause", () => {
+  if (audiobook.classList.contains("is-preparing")) {
+    clearInterval(progressSaveTimer);
+    progressSaveTimer = null;
+  } else stopProgressSaving();
   document.querySelector(".play-control").textContent = "▶";
   bookMedia.querySelector("video")?.pause();
   bookSoundtrack.pause();
@@ -838,10 +1005,16 @@ narration.addEventListener("pause", () => {
   else updateMediaSession();
 });
 narration.addEventListener("ended", () => {
+  stopProgressSaving();
   if (currentBookChapter < BOOK_DATA.length - 1) loadBookChapter(currentBookChapter + 1, true);
   else enterThirdPage();
 });
 setupMediaSession();
+
+window.addEventListener("pagehide", saveChapterProgress);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveChapterProgress();
+});
 
 window.addEventListener("pageshow", () => {
   thirdTransitionStarted = false;
@@ -864,6 +1037,7 @@ buildCorruptionBars();
 
 returnHome.addEventListener("click", () => {
   hasReturned = true;
+  setStorageValue("office-returned", "1");
   setShellMetadata("office");
   story.classList.remove("show-404");
   notFound.setAttribute("aria-hidden", "true");
@@ -881,8 +1055,8 @@ instructionStart.addEventListener("click", () => {
 });
 
 document.addEventListener("pointerdown", () => {
-  if (instruction.hidden && audiobook.hidden && !hasReturned) startMusic();
-}, { once: true });
+  if (instruction.hidden && audiobook.hidden && !story.classList.contains("show-404")) startMusic();
+});
 
 prev.addEventListener("click", () => setCase(activeCase - 1));
 next.addEventListener("click", () => setCase(activeCase + 1));
@@ -900,6 +1074,7 @@ window.addEventListener("keydown", event => {
   if (event.key === "ArrowRight") next.click();
 });
 const restoredExperience = readExperience();
+hasReturned = storageValue("office-returned") === "1";
 const restoredCase = Number.isInteger(restoredExperience.activeCase) ? restoredExperience.activeCase : 0;
 setCase(restoredCase, false);
 if (restoredExperience.shell === "book" && storageValue("audiobook-visited") === "1") {
