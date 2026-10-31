@@ -14,7 +14,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <title>Пагуба</title>
     <link id="accessibleIcon" rel="icon" type="image/png" href="content/Icons/chapters/chapter-1.png" />
-    <link rel="stylesheet" href="accessible.css?v=20261031a" />
+    <link rel="stylesheet" href="accessible.css?v=20261031b" />
   </head>
   <body>
     <a class="skip-link" href="#chapterText">Перейти к тексту главы</a>
@@ -62,6 +62,14 @@
         <div class="selection-tools" id="selectionTools" hidden>
           <button id="copySelectionLink" type="button">Скопировать ссылку на фрагмент</button>
         </div>
+        <nav class="chapter-navigation chapter-navigation-bottom" aria-label="Выбор следующей главы">
+          <label for="chapterSelectBottom">Глава</label>
+          <select id="chapterSelectBottom"></select>
+          <div class="chapter-buttons">
+            <button id="previousChapterBottom" type="button" aria-label="Предыдущая глава">←</button>
+            <button id="nextChapterBottom" type="button" aria-label="Следующая глава">→</button>
+          </div>
+        </nav>
       </article>
 
       <p class="status" id="chapterStatus" role="status"></p>
@@ -72,6 +80,6 @@
     </footer>
 
     <script src="content/book.js"></script>
-    <script src="accessible.js?v=20261031a"></script>
+    <script src="accessible.js?v=20261031b"></script>
   </body>
 </html>

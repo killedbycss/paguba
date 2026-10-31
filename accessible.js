@@ -12,6 +12,9 @@
   const select = document.querySelector("#chapterSelect");
   const previous = document.querySelector("#previousChapter");
   const next = document.querySelector("#nextChapter");
+  const bottomSelect = document.querySelector("#chapterSelectBottom");
+  const bottomPrevious = document.querySelector("#previousChapterBottom");
+  const bottomNext = document.querySelector("#nextChapterBottom");
   const title = document.querySelector("#chapterTitle");
   const text = document.querySelector("#chapterText");
   const narration = document.querySelector("#accessibleNarration");
@@ -25,7 +28,9 @@
   let readingSize = 1.2;
   let selectedText = "";
 
-  select.innerHTML = BOOK_DATA.map((chapter, index) => `<option value="${index}">Глава ${index + 1}. ${chapter.title}</option>`).join("");
+  const chapterOptions = BOOK_DATA.map((chapter, index) => `<option value="${index}">Глава ${index + 1}. ${chapter.title}</option>`).join("");
+  select.innerHTML = chapterOptions;
+  bottomSelect.innerHTML = chapterOptions;
 
   function updateIcon() {
     const replacement = icon.cloneNode();
@@ -60,6 +65,7 @@
     narration.src = audioSources[chapterIndex];
     narration.load();
     select.value = String(chapterIndex);
+    bottomSelect.value = String(chapterIndex);
     title.textContent = heading;
     text.replaceChildren(...chapter.text.split(/\n+/).map(paragraph => {
       const element = document.createElement("p");
@@ -68,6 +74,8 @@
     }).filter(paragraph => paragraph.textContent));
     previous.disabled = chapterIndex === 0;
     next.disabled = chapterIndex === BOOK_DATA.length - 1;
+    bottomPrevious.disabled = chapterIndex === 0;
+    bottomNext.disabled = chapterIndex === BOOK_DATA.length - 1;
     if (preserveQuote) revealQuotedText(initialParams.get("quote"));
     else history.replaceState(null, "", `${location.pathname}#chapter-${chapterIndex + 1}`);
     document.title = `${heading} — Пагуба`;
@@ -85,6 +93,9 @@
   previous.addEventListener("click", () => changeChapter(chapterIndex - 1));
   next.addEventListener("click", () => changeChapter(chapterIndex + 1));
   select.addEventListener("change", () => changeChapter(Number(select.value)));
+  bottomPrevious.addEventListener("click", () => changeChapter(chapterIndex - 1));
+  bottomNext.addEventListener("click", () => changeChapter(chapterIndex + 1));
+  bottomSelect.addEventListener("change", () => changeChapter(Number(bottomSelect.value)));
   document.querySelector("#increaseText").addEventListener("click", () => {
     readingSize = Math.min(2.2, readingSize + .15);
     document.documentElement.style.setProperty("--reading-size", `${readingSize}rem`);

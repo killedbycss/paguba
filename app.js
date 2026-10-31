@@ -478,7 +478,7 @@ function setCase(index, shouldPersist = true) {
   caseAccessibility.hidden = hasReturned ? activeCase !== 0 : activeCase > 1;
   caseAccessibility.href = `accessible.html#chapter-${activeCase + 1}`;
   if (audiobook.hidden) setThemeColor(OFFICE_THEME_COLORS[activeCase]);
-  if (!officeMusic.paused) fadeMusic([.11, .1, .085, .07, .05, .035][activeCase], 1100);
+  if (!officeMusic.paused) fadeMusic(officeMusicTarget(), 1100);
   if (shouldPersist) persistOfficeState();
 }
 
@@ -522,11 +522,19 @@ function ensureBookSoundtrackGraph() {
       bookSoundtrackSource.connect(bookSoundtrackGain).connect(audioContext.destination);
       bookSoundtrack.volume = 1;
     }
-    if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
     return true;
   } catch (_) {
     return false;
   }
+}
+
+async function startBookSoundtrack() {
+  if (document.hidden) return;
+  const hasGraph = ensureBookSoundtrackGraph() && bookSoundtrackGain;
+  if (hasGraph && audioContext.state === "suspended") await audioContext.resume();
+  await bookSoundtrack.play();
+  const soundtrackVolume = matchMedia("(pointer: coarse)").matches ? BOOK_SOUNDTRACK_VOLUME_MOBILE : BOOK_SOUNDTRACK_VOLUME;
+  fadeBookSoundtrack(soundtrackVolume, 2200);
 }
 
 function fadeBookSoundtrack(target, duration = 900) {
@@ -631,6 +639,9 @@ function clearMediaSession() {
 }
 
 function setupMediaSession() {
+  try {
+    if ("audioSession" in navigator) navigator.audioSession.type = "playback";
+  } catch (_) { /* The Audio Session API is optional. */ }
   if (!("mediaSession" in navigator)) return;
   const bind = (action, handler) => {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) { /* Browser does not expose this action. */ }
@@ -657,12 +668,17 @@ function setupMediaSession() {
 }
 
 async function startMusic() {
-  const target = [.085, .07, .055, .05, .035, .015][activeCase];
+  const target = officeMusicTarget();
   if (officeMusic.paused) {
     officeMusic.volume = 0;
     try { await officeMusic.play(); } catch (_) { return; }
   }
   fadeMusic(target, 1800);
+}
+
+function officeMusicTarget() {
+  if (storageValue("audiobook-visited") === "1") return BOOK_SOUNDTRACK_VOLUME;
+  return [.085, .07, .055, .05, .035, .015][activeCase];
 }
 
 function show404() {
@@ -1057,9 +1073,7 @@ narration.addEventListener("play", () => {
   document.querySelector(".play-control").textContent = "Ⅱ";
   bookMedia.querySelector("video")?.play().catch(() => {});
   updateMediaSession();
-  bookSoundtrack.play().then(() => {
-    const soundtrackVolume = matchMedia("(pointer: coarse)").matches ? BOOK_SOUNDTRACK_VOLUME_MOBILE : BOOK_SOUNDTRACK_VOLUME;
-    fadeBookSoundtrack(soundtrackVolume, 2200);
+  startBookSoundtrack().then(() => {
     updateMediaSession();
   }).catch(() => {});
 });
@@ -1094,7 +1108,13 @@ document.addEventListener("selectionchange", () => {
 
 window.addEventListener("pagehide", saveChapterProgress);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saveChapterProgress();
+  if (document.visibilityState === "hidden") {
+    saveChapterProgress();
+    if (!audiobook.hidden) {
+      if (bookSoundtrackGain) bookSoundtrackGain.gain.value = 0;
+      bookSoundtrack.pause();
+    }
+  }
 });
 
 window.addEventListener("pageshow", () => {
@@ -1136,7 +1156,11 @@ instructionStart.addEventListener("click", () => {
 });
 
 document.addEventListener("pointerdown", () => {
-  if (instruction.hidden && audiobook.hidden && !story.classList.contains("show-404")) startMusic();
+  if (!audiobook.hidden) {
+    ensureBookSoundtrackGraph();
+    if (audioContext?.state === "suspended") audioContext.resume().catch(() => {});
+    if (!narration.paused && bookSoundtrack.paused) startBookSoundtrack().catch(() => {});
+  } else if (instruction.hidden && !story.classList.contains("show-404")) startMusic();
 });
 
 prev.addEventListener("click", () => setCase(activeCase - 1));
