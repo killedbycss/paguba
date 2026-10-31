@@ -83,8 +83,8 @@ const CHAPTER_AUDIO = [
   "content/AudioPart2/Record8.m4a",
 ];
 const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
-const BOOK_SOUNDTRACK_VOLUME = .014;
-const BOOK_SOUNDTRACK_VOLUME_MOBILE = .008;
+const BOOK_SOUNDTRACK_VOLUME = .0125;
+const BOOK_SOUNDTRACK_VOLUME_MOBILE = .0125;
 let activeCase = 0;
 let audioContext;
 let bookSoundtrackSource;
@@ -657,7 +657,7 @@ function setupMediaSession() {
 }
 
 async function startMusic() {
-  const target = [.11, .1, .085, .07, .05, .035][activeCase];
+  const target = [.085, .07, .055, .05, .035, .015][activeCase];
   if (officeMusic.paused) {
     officeMusic.volume = 0;
     try { await officeMusic.play(); } catch (_) { return; }
