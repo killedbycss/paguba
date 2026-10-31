@@ -83,8 +83,8 @@ const CHAPTER_AUDIO = [
   "content/AudioPart2/Record8.m4a",
 ];
 const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
-const BOOK_SOUNDTRACK_VOLUME = .01;
-const BOOK_SOUNDTRACK_VOLUME_MOBILE = .004;
+const BOOK_SOUNDTRACK_VOLUME = .014;
+const BOOK_SOUNDTRACK_VOLUME_MOBILE = .006;
 let activeCase = 0;
 let audioContext;
 let bookSoundtrackSource;
@@ -603,7 +603,7 @@ function updateMediaSession() {
     artist: "Доктор. Дневник",
     album: "Пагуба",
     artwork: CHAPTER_ARTWORK_SIZES.map(size => ({
-      src: new URL(`content/Icons/chapters/chapter-${currentBookChapter + 1}-${size}.png`, window.location.href).href,
+      src: new URL(`content/Icons/chapters/chapter-${currentBookChapter + 1}-${size}.png`, APP_ROOT_URL).href,
       sizes: `${size}x${size}`,
       type: "image/png",
     })),
