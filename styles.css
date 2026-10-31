@@ -500,6 +500,7 @@ button { font: inherit; }
 .book-word { color: transparent; opacity: 0; transition: color 520ms ease, opacity 520ms ease; }
 .book-word.is-spoken { color: rgba(255,255,255,.46); opacity: 1; }
 .book-word.is-current { color: #fff; opacity: 1; }
+.book-word.is-quoted { background: rgba(255,174,0,.24); box-shadow: 0 0 0 2px rgba(255,174,0,.24); }
 .book-paragraph.is-previous .book-word { color: rgba(255,255,255,.28); opacity: 1; }
 
 .book-controls {

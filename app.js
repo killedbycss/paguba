@@ -51,6 +51,9 @@ let progressSaveTimer;
 let thirdTransitionStarted = false;
 const EXPERIENCE_KEY = "paguba-experience-v1";
 const audioFadeTokens = new WeakMap();
+const APP_ROOT_URL = new URL(".", document.currentScript?.src || location.href);
+let pendingShareQuote = new URLSearchParams(location.search).get("quote") || "";
+let selectionURLTimer;
 
 const CHAPTER_MEDIA = [
   [{ at: 0, src: "content/VideosPart2/Start.mp4", intro: true }, { at: 10, src: "content/ImagesPart2/CH1_Start.JPG" }, { at: .62, src: "content/VideosPart2/CH1.MP4", loop: true }],
@@ -736,6 +739,27 @@ function renderBookText(index) {
   }).join("");
 }
 
+function chapterShareURL(quote = "") {
+  const url = new URL(`share/chapter-${currentBookChapter + 1}/`, APP_ROOT_URL);
+  if (quote) url.searchParams.set("quote", quote);
+  return url;
+}
+
+function updateChapterShareURL(quote = "") {
+  history.replaceState(null, "", chapterShareURL(quote));
+}
+
+function highlightBookQuote(quote) {
+  const normalize = value => value.toLocaleLowerCase("ru").replace(/[^а-яёa-z0-9-]/gi, "");
+  const quoteWords = quote.split(/\s+/).map(normalize).filter(Boolean);
+  const words = [...bookText.querySelectorAll(".book-word")];
+  if (!quoteWords.length) return -1;
+  const start = words.findIndex((_, index) => quoteWords.every((word, offset) => normalize(words[index + offset]?.textContent || "") === word));
+  if (start < 0) return -1;
+  words.slice(start, start + quoteWords.length).forEach(word => word.classList.add("is-quoted"));
+  return start;
+}
+
 function updateBookProgress() {
   const timings = timingForChapter(currentBookChapter);
   if (!timings.length) return;
@@ -836,6 +860,9 @@ function loadBookChapter(index, withIntro = true, autoplay = true) {
   audiobook.classList.add("is-preparing");
   audiobook.classList.remove("is-loading");
   currentBookChapter = Math.max(0, Math.min(BOOK_DATA.length - 1, index));
+  const openingQuote = pendingShareQuote;
+  pendingShareQuote = "";
+  updateChapterShareURL(openingQuote);
   setSiteIcon(CHAPTER_ICONS[currentBookChapter]);
   document.title = `Глава ${currentBookChapter + 1}. ${BOOK_DATA[currentBookChapter].title} — Доктор. Дневник`;
   persistBookLocation();
@@ -844,6 +871,7 @@ function loadBookChapter(index, withIntro = true, autoplay = true) {
   bookMedia.classList.remove("is-live");
   narration.src = CHAPTER_AUDIO[currentBookChapter];
   renderBookText(currentBookChapter);
+  const quotedWordIndex = highlightBookQuote(openingQuote);
   showChapterMedia(0);
   playChapterSoundtrack(currentBookChapter, autoplay);
   updateMediaSession();
@@ -884,7 +912,8 @@ function loadBookChapter(index, withIntro = true, autoplay = true) {
   narration.addEventListener("loadedmetadata", () => {
     if (loadToken !== chapterLoadToken) return;
     const saved = readChapterProgress(currentBookChapter);
-    narration.currentTime = Math.min(saved, Math.max(0, narration.duration - .1));
+    const quoteTime = quotedWordIndex >= 0 ? timingForChapter(currentBookChapter)[quotedWordIndex]?.start : null;
+    narration.currentTime = Math.min(quoteTime ?? saved, Math.max(0, narration.duration - .1));
     restored = true;
     updateBookProgress();
     updateMediaSession();
@@ -923,6 +952,7 @@ function leaveAudiobook() {
   fadeAudio(bookSoundtrack, 0, 700);
   clearMediaSession();
   audiobook.hidden = true;
+  history.replaceState(null, "", new URL("index.html", APP_ROOT_URL));
   setShellMetadata("office");
   if (currentBookChapter <= 5) {
     setCase(currentBookChapter);
@@ -1011,6 +1041,17 @@ narration.addEventListener("ended", () => {
 });
 setupMediaSession();
 
+document.addEventListener("selectionchange", () => {
+  if (audiobook.hidden) return;
+  window.clearTimeout(selectionURLTimer);
+  selectionURLTimer = window.setTimeout(() => {
+    const selection = getSelection();
+    if (!selection || selection.isCollapsed || !bookText.contains(selection.anchorNode) || !bookText.contains(selection.focusNode)) return;
+    const quote = selection.toString().replace(/\s+/g, " ").trim().slice(0, 600);
+    if (quote.length > 1) updateChapterShareURL(quote);
+  }, 80);
+});
+
 window.addEventListener("pagehide", saveChapterProgress);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saveChapterProgress();
@@ -1077,7 +1118,7 @@ const restoredExperience = readExperience();
 hasReturned = storageValue("office-returned") === "1";
 const restoredCase = Number.isInteger(restoredExperience.activeCase) ? restoredExperience.activeCase : 0;
 setCase(restoredCase, false);
-const sharedChapter = Number(location.hash.match(/book-chapter-(\d+)/)?.[1]);
+const sharedChapter = Number(new URLSearchParams(location.search).get("chapter") || location.hash.match(/book-chapter-(\d+)/)?.[1]);
 if (sharedChapter >= 1 && sharedChapter <= BOOK_DATA.length) {
   instruction.hidden = true;
   enterAudiobook(sharedChapter - 1, false, false);
