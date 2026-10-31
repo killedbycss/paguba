@@ -195,9 +195,9 @@
   function advance(){if(!ready||credits.classList.contains("is-visible"))return;if(transitioning){pendingAdvance=true;return;}activity=1;clickStarted=performance.now();if(queue.length||queueDone){showNext();return;}if(scene==="blank")setScene("question");else if(scene==="question")setScene("choice1");else if(scene==="hand")setScene("handQuestion");else if(scene==="handQuestion")setScene("choice2");}
   function choose(yes){if(transitioning)return;activity=1;clickStarted=performance.now();if(scene==="choice1")yes?setScene("hand"):setScene("question");else if(scene==="choice2")yes?humanSequence():startSphere();else if(scene==="choice3")yes?humanSequence():finishStory();}
   function startThirdSoundtrack(){
-    if(!thirdSoundtrack||soundtrackStarting||(!thirdSoundtrack.paused&&thirdSoundtrack.volume>.07))return;
+    if(!thirdSoundtrack||soundtrackStarting||(!thirdSoundtrack.paused&&thirdSoundtrack.volume>.045))return;
     soundtrackStarting=true;thirdSoundtrack.volume=0;
-    thirdSoundtrack.play().then(()=>{const started=performance.now();const fade=now=>{const p=Math.max(0,Math.min(1,(now-started)/1800));thirdSoundtrack.volume=.085*p;if(p<1)requestAnimationFrame(fade);else soundtrackStarting=false;};requestAnimationFrame(fade);}).catch(()=>{soundtrackStarting=false;});
+    thirdSoundtrack.play().then(()=>{const started=performance.now();const fade=now=>{const p=Math.max(0,Math.min(1,(now-started)/1800));thirdSoundtrack.volume=.055*p;if(p<1)requestAnimationFrame(fade);else soundtrackStarting=false;};requestAnimationFrame(fade);}).catch(()=>{soundtrackStarting=false;});
   }
   choices.addEventListener("pointerup",event=>{event.stopPropagation();clickPoint=[event.clientX/innerWidth,1-event.clientY/innerHeight];const b=event.target.closest("button");if(b)choose(b.dataset.choice==="yes");});
   shell.addEventListener("pointermove",event=>{pointer=[event.clientX/innerWidth,1-event.clientY/innerHeight];activity=Math.min(1,activity+.1);});

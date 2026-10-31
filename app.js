@@ -84,7 +84,7 @@ const CHAPTER_AUDIO = [
 ];
 const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
 const BOOK_SOUNDTRACK_VOLUME = .014;
-const BOOK_SOUNDTRACK_VOLUME_MOBILE = .006;
+const BOOK_SOUNDTRACK_VOLUME_MOBILE = .008;
 let activeCase = 0;
 let audioContext;
 let bookSoundtrackSource;
@@ -478,7 +478,7 @@ function setCase(index, shouldPersist = true) {
   caseAccessibility.hidden = hasReturned ? activeCase !== 0 : activeCase > 1;
   caseAccessibility.href = `accessible.html#chapter-${activeCase + 1}`;
   if (audiobook.hidden) setThemeColor(OFFICE_THEME_COLORS[activeCase]);
-  if (!officeMusic.paused) fadeMusic([.16, .15, .13, .11, .08, .055][activeCase], 1100);
+  if (!officeMusic.paused) fadeMusic([.11, .1, .085, .07, .05, .035][activeCase], 1100);
   if (shouldPersist) persistOfficeState();
 }
 
@@ -657,7 +657,7 @@ function setupMediaSession() {
 }
 
 async function startMusic() {
-  const target = [.16, .15, .13, .11, .08, .055][activeCase];
+  const target = [.11, .1, .085, .07, .05, .035][activeCase];
   if (officeMusic.paused) {
     officeMusic.volume = 0;
     try { await officeMusic.play(); } catch (_) { return; }
