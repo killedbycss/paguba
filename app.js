@@ -52,6 +52,9 @@ let thirdTransitionStarted = false;
 const EXPERIENCE_KEY = "paguba-experience-v1";
 const audioFadeTokens = new WeakMap();
 const APP_ROOT_URL = new URL(".", document.currentScript?.src || location.href);
+const appBase = document.createElement("base");
+appBase.href = APP_ROOT_URL.href;
+document.head.prepend(appBase);
 let pendingShareQuote = new URLSearchParams(location.search).get("quote") || "";
 let selectionURLTimer;
 
