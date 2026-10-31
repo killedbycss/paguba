@@ -16,9 +16,14 @@
   const text = document.querySelector("#chapterText");
   const narration = document.querySelector("#accessibleNarration");
   const status = document.querySelector("#chapterStatus");
+  const selectionTools = document.querySelector("#selectionTools");
+  const copySelectionLink = document.querySelector("#copySelectionLink");
   let icon = document.querySelector("#accessibleIcon");
-  let chapterIndex = Math.max(0, Math.min(BOOK_DATA.length - 1, Number(location.hash.match(/chapter-(\d+)/)?.[1] || 1) - 1));
+  const initialParams = new URLSearchParams(location.search);
+  const requestedChapter = Number(initialParams.get("chapter") || location.hash.match(/chapter-(\d+)/)?.[1] || 1);
+  let chapterIndex = Math.max(0, Math.min(BOOK_DATA.length - 1, requestedChapter - 1));
   let readingSize = 1.2;
+  let selectedText = "";
 
   select.innerHTML = BOOK_DATA.map((chapter, index) => `<option value="${index}">Глава ${index + 1}. ${chapter.title}</option>`).join("");
 
@@ -29,7 +34,26 @@
     icon = replacement;
   }
 
-  function renderChapter(announce = false) {
+  function revealQuotedText(quote) {
+    if (!quote) return;
+    const normalizedQuote = quote.replace(/\s+/g, " ").trim();
+    for (const paragraph of text.querySelectorAll("p")) {
+      const normalizedParagraph = paragraph.textContent.replace(/\s+/g, " ");
+      const start = normalizedParagraph.indexOf(normalizedQuote);
+      if (start < 0) continue;
+      const before = paragraph.textContent.slice(0, start);
+      const match = paragraph.textContent.slice(start, start + normalizedQuote.length);
+      const after = paragraph.textContent.slice(start + normalizedQuote.length);
+      const mark = document.createElement("mark");
+      mark.id = "quote";
+      mark.textContent = match;
+      paragraph.replaceChildren(before, mark, after);
+      requestAnimationFrame(() => mark.scrollIntoView({ block: "center" }));
+      return;
+    }
+  }
+
+  function renderChapter(announce = false, preserveQuote = false) {
     const chapter = BOOK_DATA[chapterIndex];
     const heading = `Глава ${chapterIndex + 1}. ${chapter.title}`;
     narration.pause();
@@ -44,8 +68,9 @@
     }).filter(paragraph => paragraph.textContent));
     previous.disabled = chapterIndex === 0;
     next.disabled = chapterIndex === BOOK_DATA.length - 1;
-    history.replaceState(null, "", `#chapter-${chapterIndex + 1}`);
-    document.title = `${heading} — доступная версия`;
+    if (preserveQuote) revealQuotedText(initialParams.get("quote"));
+    else history.replaceState(null, "", `${location.pathname}#chapter-${chapterIndex + 1}`);
+    document.title = `${heading} — Пагуба`;
     updateIcon();
     if (announce) status.textContent = `Открыта ${heading}`;
   }
@@ -70,16 +95,44 @@
     document.documentElement.style.setProperty("--reading-size", `${readingSize}rem`);
     status.textContent = `Размер текста уменьшен до ${Math.round(readingSize * 100)} процентов`;
   });
-  document.querySelector("#toggleContrast").addEventListener("click", event => {
-    const enabled = document.body.classList.toggle("high-contrast");
-    event.currentTarget.setAttribute("aria-pressed", String(enabled));
-    event.currentTarget.textContent = enabled ? "Обычная контрастность" : "Высокая контрастность";
-    status.textContent = enabled ? "Высокая контрастность включена" : "Высокая контрастность выключена";
+  document.querySelectorAll("[data-vision]").forEach(button => button.addEventListener("click", () => {
+    const mode = button.dataset.vision;
+    document.body.dataset.vision = mode;
+    localStorage.setItem("paguba-vision-mode", mode);
+    document.querySelectorAll("[data-vision]").forEach(option => option.setAttribute("aria-pressed", String(option === button)));
+    status.textContent = `Включён режим зрения: ${button.textContent}`;
+  }));
+
+  document.addEventListener("selectionchange", () => {
+    const selection = getSelection();
+    const anchor = selection?.anchorNode;
+    const focus = selection?.focusNode;
+    const insideText = anchor && focus && text.contains(anchor) && text.contains(focus);
+    selectedText = insideText ? selection.toString().replace(/\s+/g, " ").trim().slice(0, 600) : "";
+    selectionTools.hidden = selectedText.length < 2;
+  });
+
+  copySelectionLink.addEventListener("click", async () => {
+    const url = new URL(location.pathname, location.href);
+    url.searchParams.set("chapter", String(chapterIndex + 1));
+    url.searchParams.set("quote", selectedText);
+    url.hash = "quote";
+    try {
+      await navigator.clipboard.writeText(url.href);
+      status.textContent = "Ссылка на выбранный фрагмент скопирована";
+      copySelectionLink.textContent = "Ссылка скопирована";
+      setTimeout(() => { copySelectionLink.textContent = "Скопировать ссылку на фрагмент"; }, 1800);
+    } catch {
+      status.textContent = "Не удалось скопировать ссылку";
+    }
   });
   window.addEventListener("hashchange", () => {
     const requested = Number(location.hash.match(/chapter-(\d+)/)?.[1]);
     if (requested && requested - 1 !== chapterIndex) changeChapter(requested - 1);
   });
 
-  renderChapter();
+  const savedVision = localStorage.getItem("paguba-vision-mode") || "light";
+  const visionButton = document.querySelector(`[data-vision="${savedVision}"]`) || document.querySelector('[data-vision="light"]');
+  visionButton.click();
+  renderChapter(false, Boolean(initialParams.get("quote")));
 })();

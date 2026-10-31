@@ -1077,7 +1077,11 @@ const restoredExperience = readExperience();
 hasReturned = storageValue("office-returned") === "1";
 const restoredCase = Number.isInteger(restoredExperience.activeCase) ? restoredExperience.activeCase : 0;
 setCase(restoredCase, false);
-if (restoredExperience.shell === "book" && storageValue("audiobook-visited") === "1") {
+const sharedChapter = Number(location.hash.match(/book-chapter-(\d+)/)?.[1]);
+if (sharedChapter >= 1 && sharedChapter <= BOOK_DATA.length) {
+  instruction.hidden = true;
+  enterAudiobook(sharedChapter - 1, false, false);
+} else if (restoredExperience.shell === "book" && storageValue("audiobook-visited") === "1") {
   instruction.hidden = true;
   const restoredChapter = Number.isInteger(restoredExperience.bookChapter) ? restoredExperience.bookChapter : restoredCase;
   enterAudiobook(restoredChapter, false, false);

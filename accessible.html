@@ -3,38 +3,54 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Доступная текстовая версия дневника" />
+    <meta name="description" content="Читайте «Пагубу» в удобном формате или слушайте в озвучке." />
     <meta name="theme-color" content="#ffffff" />
-    <title>Доктор. Дневник — доступная версия</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Пагуба" />
+    <meta property="og:description" content="Читайте в удобном формате или слушайте в озвучке." />
+    <meta property="og:image" content="https://killedbycss.github.io/paguba/content/meta/accessible.png" />
+    <meta property="og:image:width" content="1600" />
+    <meta property="og:image:height" content="900" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>Пагуба</title>
     <link id="accessibleIcon" rel="icon" type="image/png" href="content/Icons/chapters/chapter-1.png" />
-    <link rel="stylesheet" href="accessible.css?v=20261030b" />
+    <link rel="stylesheet" href="accessible.css?v=20261031a" />
   </head>
   <body>
     <a class="skip-link" href="#chapterText">Перейти к тексту главы</a>
 
     <header class="page-header">
       <a href="index.html">← Вернуться в основную версию</a>
-      <p class="eyebrow">Текстовая версия</p>
-      <h1>Доктор. Дневник</h1>
-      <p class="lead">Восемь глав дневника: читайте в удобном темпе или слушайте озвучку.</p>
+      <h1>Пагуба</h1>
+      <p class="lead">Читайте в удобном формате или слушайте в озвучке.</p>
     </header>
 
-    <main>
-      <section class="reading-settings" aria-labelledby="settingsTitle">
-        <h2 id="settingsTitle">Настройки чтения</h2>
-        <div class="settings-row">
-          <button id="decreaseText" type="button" aria-label="Уменьшить размер текста">А−</button>
-          <button id="increaseText" type="button" aria-label="Увеличить размер текста">А+</button>
-          <button id="toggleContrast" type="button" aria-pressed="false">Высокая контрастность</button>
-        </div>
-      </section>
+    <main class="page-layout">
+      <aside class="reader-sidebar" aria-label="Управление чтением">
+        <section class="reading-settings" aria-labelledby="settingsTitle">
+          <h2 id="settingsTitle">Настройки чтения</h2>
+          <div class="settings-row" aria-label="Размер текста">
+            <button id="decreaseText" type="button" aria-label="Уменьшить размер текста">А−</button>
+            <button id="increaseText" type="button" aria-label="Увеличить размер текста">А+</button>
+          </div>
+          <fieldset class="vision-modes">
+            <legend>Режим зрения</legend>
+            <button type="button" data-vision="light" aria-pressed="true">Светлый</button>
+            <button type="button" data-vision="dark" aria-pressed="false">Тёмный</button>
+            <button type="button" data-vision="contrast" aria-pressed="false">Контрастный</button>
+            <button type="button" data-vision="soft" aria-pressed="false">Мягкий</button>
+          </fieldset>
+        </section>
 
-      <nav class="chapter-navigation" aria-label="Выбор главы">
-        <button id="previousChapter" type="button">← Предыдущая глава</button>
-        <label for="chapterSelect">Глава</label>
-        <select id="chapterSelect"></select>
-        <button id="nextChapter" type="button">Следующая глава →</button>
-      </nav>
+        <nav class="chapter-navigation" aria-label="Выбор главы">
+          <label for="chapterSelect">Глава</label>
+          <select id="chapterSelect"></select>
+          <div class="chapter-buttons">
+            <button id="previousChapter" type="button" aria-label="Предыдущая глава">←</button>
+            <button id="nextChapter" type="button" aria-label="Следующая глава">→</button>
+          </div>
+        </nav>
+      </aside>
 
       <article class="reader" aria-labelledby="chapterTitle">
         <h2 id="chapterTitle" tabindex="-1"></h2>
@@ -43,6 +59,9 @@
           <audio id="accessibleNarration" controls preload="metadata"></audio>
         </section>
         <div class="chapter-text" id="chapterText"></div>
+        <div class="selection-tools" id="selectionTools" hidden>
+          <button id="copySelectionLink" type="button">Скопировать ссылку на фрагмент</button>
+        </div>
       </article>
 
       <p class="status" id="chapterStatus" role="status"></p>
@@ -53,6 +72,6 @@
     </footer>
 
     <script src="content/book.js"></script>
-    <script src="accessible.js?v=20261030b"></script>
+    <script src="accessible.js?v=20261031a"></script>
   </body>
 </html>

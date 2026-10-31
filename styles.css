@@ -515,7 +515,6 @@ button { font: inherit; }
 .book-controls button { font: 400 clamp(35px, 3.2vw, 65px)/1 var(--ui); user-select: none; touch-action: none; }
 .book-controls .play-control { font-size: clamp(27px, 2.5vw, 50px); }
 .book-controls .chapter-skip { font-size: clamp(24px, 2.3vw, 46px); letter-spacing: -.32em; padding-right: .32em; opacity: .72; }
-
 .audiobook.is-loading .book-controls button { pointer-events: none; }
 .audiobook.is-loading .book-controls .play-control { opacity: .12; }
 .audiobook.is-loading .book-controls button:not(.play-control) {
