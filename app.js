@@ -84,8 +84,11 @@ const CHAPTER_AUDIO = [
 ];
 const OFFICE_THEME_COLORS = ["#f3d58f", "#cfe6ff", "#ffe3bd", "#ffc1dc", "#67142e", "#080808"];
 const BOOK_SOUNDTRACK_VOLUME = .01;
+const BOOK_SOUNDTRACK_VOLUME_MOBILE = .004;
 let activeCase = 0;
 let audioContext;
+let bookSoundtrackSource;
+let bookSoundtrackGain;
 let isAnimating = false;
 let hasReturned = false;
 
@@ -509,12 +512,44 @@ function fadeAudio(audio, target, duration = 900) {
   requestAnimationFrame(tick);
 }
 
+function ensureBookSoundtrackGraph() {
+  try {
+    audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (!bookSoundtrackSource) {
+      bookSoundtrackSource = audioContext.createMediaElementSource(bookSoundtrack);
+      bookSoundtrackGain = audioContext.createGain();
+      bookSoundtrackGain.gain.value = 0;
+      bookSoundtrackSource.connect(bookSoundtrackGain).connect(audioContext.destination);
+      bookSoundtrack.volume = 1;
+    }
+    if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function fadeBookSoundtrack(target, duration = 900) {
+  if (!ensureBookSoundtrackGraph() || !bookSoundtrackGain) {
+    fadeAudio(bookSoundtrack, target, duration);
+    return;
+  }
+  const now = audioContext.currentTime;
+  const gain = bookSoundtrackGain.gain;
+  gain.cancelScheduledValues(now);
+  gain.setValueAtTime(gain.value, now);
+  gain.linearRampToValueAtTime(target, now + duration / 1000);
+  if (target === 0) window.setTimeout(() => {
+    if (gain.value < .0001) bookSoundtrack.pause();
+  }, duration + 50);
+}
+
 function enterThirdPage() {
   if (thirdTransitionStarted) return;
   thirdTransitionStarted = true;
   saveChapterProgress();
   narration.pause();
-  fadeAudio(bookSoundtrack, 0, 900);
+  fadeBookSoundtrack(0, 900);
   shellTransition.classList.add("is-active");
   window.setTimeout(() => {
     window.location.href = "third.html";
@@ -555,7 +590,8 @@ function setShellMetadata(shell) {
 
 function playChapterSoundtrack(index, shouldPlay = true) {
   bookSoundtrack.src = `content/Soundtrack/${CHAPTER_SOUNDTRACKS[index]}.mp3`;
-  bookSoundtrack.volume = 0;
+  if (ensureBookSoundtrackGraph() && bookSoundtrackGain) bookSoundtrackGain.gain.value = 0;
+  else bookSoundtrack.volume = 0;
   if (!shouldPlay) bookSoundtrack.pause();
 }
 
@@ -952,7 +988,7 @@ function leaveAudiobook() {
   audiobook.classList.remove("is-preparing", "is-loading");
   saveChapterProgress();
   narration.pause();
-  fadeAudio(bookSoundtrack, 0, 700);
+  fadeBookSoundtrack(0, 700);
   clearMediaSession();
   audiobook.hidden = true;
   history.replaceState(null, "", new URL("index.html", APP_ROOT_URL));
@@ -1022,7 +1058,8 @@ narration.addEventListener("play", () => {
   bookMedia.querySelector("video")?.play().catch(() => {});
   updateMediaSession();
   bookSoundtrack.play().then(() => {
-    fadeAudio(bookSoundtrack, BOOK_SOUNDTRACK_VOLUME, 2200);
+    const soundtrackVolume = matchMedia("(pointer: coarse)").matches ? BOOK_SOUNDTRACK_VOLUME_MOBILE : BOOK_SOUNDTRACK_VOLUME;
+    fadeBookSoundtrack(soundtrackVolume, 2200);
     updateMediaSession();
   }).catch(() => {});
 });
